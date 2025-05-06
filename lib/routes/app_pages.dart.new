@@ -1,0 +1,89 @@
+import 'package:get/get.dart';
+
+import '../routes/app_routes.dart';
+import '../views/splash_screen.dart';
+import '../views/auth/login_screen.dart';
+import '../views/auth/register_screen.dart';
+import '../views/home/home_screen.dart';
+import '../views/health_data/health_data_screen.dart';
+import '../views/health_data/add_health_data_screen.dart';
+import '../views/diagnosis/diagnosis_screen.dart';
+import '../views/diagnosis/diagnosis_result_screen.dart';
+import '../views/doctors/doctors_screen.dart';
+import '../views/doctors/doctor_details_screen.dart';
+import '../views/appointments/appointments_screen.dart';
+import '../views/appointments/book_appointment_screen.dart';
+import '../views/symptoms/symptoms_screen.dart';
+
+class AppPages {
+  static final List<GetPage> pages = [
+    // Auth routes
+    GetPage(
+      name: AppRoutes.splash,
+      page: () => const SplashScreen(),
+    ),
+    GetPage(
+      name: AppRoutes.login,
+      page: () => const LoginScreen(),
+    ),
+    GetPage(
+      name: AppRoutes.register,
+      page: () => const RegisterScreen(),
+    ),
+
+    // Main routes
+    GetPage(
+      name: AppRoutes.home,
+      page: () => const HomeScreen(),
+    ),
+
+    // Health data routes
+    GetPage(
+      name: AppRoutes.healthData,
+      page: () => const HealthDataScreen(),
+    ),
+    GetPage(
+      name: AppRoutes.addHealthData,
+      page: () => const AddHealthDataScreen(),
+    ),
+
+    // Diagnosis routes
+    GetPage(
+      name: AppRoutes.diagnosis,
+      page: () => const DiagnosisScreen(),
+    ),
+    GetPage(
+      name: AppRoutes.diagnosisResult,
+      page: () => const DiagnosisResultScreen(),
+    ),
+
+    // Doctor routes
+    GetPage(
+      name: AppRoutes.doctors,
+      page: () => const DoctorsScreen(),
+    ),
+    GetPage(
+      name: AppRoutes.doctorDetails,
+      page: () => const DoctorDetailsScreen(),
+    ),
+
+    // Appointment routes
+    GetPage(
+      name: AppRoutes.appointments,
+      page: () => const AppointmentsScreen(),
+    ),
+    GetPage(
+      name: AppRoutes.bookAppointment,
+      page: () => const BookAppointmentScreen(),
+    ),
+
+    // TODO: Add lab results routes
+
+    // Symptoms routes
+    GetPage(
+      name: AppRoutes.symptoms,
+      page: () => const SymptomsScreen(),
+    ),
+    // TODO: Add add symptom route
+  ],
+};
