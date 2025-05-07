@@ -62,9 +62,10 @@ class AppointmentModel {
       type: json['type'],
       status: json['status'],
       reason: json['reason'],
-      attachments: json['attachments'] != null
-          ? List<String>.from(json['attachments'])
-          : null,
+      attachments:
+          json['attachments'] != null
+              ? List<String>.from(json['attachments'])
+              : null,
       notes: json['notes'],
       fee: json['fee'].toDouble(),
       prescriptionUrl: json['prescriptionUrl'],
@@ -109,6 +110,14 @@ class AppointmentModel {
         return 'grey';
     }
   }
+
+  // Get formatted time
+  String get formattedTime {
+    return timeSlot;
+  }
+
+  // Patient name (to be populated from external source)
+  String patientName = '';
 
   // Create a copy of the model with updated fields
   AppointmentModel copyWith({

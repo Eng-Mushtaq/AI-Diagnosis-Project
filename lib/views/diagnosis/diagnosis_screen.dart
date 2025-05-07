@@ -5,8 +5,10 @@ import '../../constants/app_constants.dart';
 import '../../controllers/auth_controller.dart';
 import '../../controllers/disease_controller.dart';
 import '../../controllers/symptom_controller.dart';
+import '../../controllers/health_data_controller.dart';
 import '../../routes/app_routes.dart';
 import '../../models/symptom_model.dart';
+import '../../models/health_data_model.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_text_field.dart';
 
@@ -30,6 +32,7 @@ class _DiagnosisScreenState extends State<DiagnosisScreen> {
   final RxInt _duration = 1.obs;
   final RxList<String> _selectedBodyParts = <String>[].obs;
   final RxList<String> _selectedFactors = <String>[].obs;
+  final RxBool _useGeminiAI = true.obs; // Toggle for using Gemini AI
 
   @override
   void dispose() {
@@ -43,32 +46,47 @@ class _DiagnosisScreenState extends State<DiagnosisScreen> {
       final userId = _authController.user!.id;
       final symptomDescription = _symptomTextController.text.trim();
 
-      // Create prediction
+      // First create and save the symptom
+      final symptom = SymptomModel(
+        id: '', // Will be assigned by the service
+        userId: userId,
+        timestamp: DateTime.now(),
+        description: symptomDescription,
+        severity: _severity.value,
+        duration: _duration.value,
+        bodyParts:
+            _selectedBodyParts.isNotEmpty ? _selectedBodyParts.toList() : null,
+        associatedFactors:
+            _selectedFactors.isNotEmpty ? _selectedFactors.toList() : null,
+        images: null,
+      );
+
+      final savedSymptom = await _symptomController.addSymptom(symptom);
+
+      if (savedSymptom == null) {
+        Get.snackbar(
+          'Error',
+          'Failed to save symptom data',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: AppColors.errorColor,
+          colorText: Colors.white,
+        );
+        return;
+      }
+
+      // Get the latest health data if available
+      final healthData = _getLatestHealthData();
+
+      // Create AI prediction with enhanced data
       final success = await _diseaseController.createPrediction(
         userId,
         symptomDescription,
+        symptom: savedSymptom,
+        healthData: healthData,
+        useGemini: _useGeminiAI.value, // Use Gemini AI based on toggle
       );
 
       if (success) {
-        // Save symptom data
-        await _symptomController.addSymptom(
-          SymptomModel(
-            id: '',
-            userId: userId,
-            timestamp: DateTime.now(),
-            description: symptomDescription,
-            severity: _severity.value,
-            duration: _duration.value,
-            bodyParts:
-                _selectedBodyParts.isNotEmpty
-                    ? _selectedBodyParts.toList()
-                    : null,
-            associatedFactors:
-                _selectedFactors.isNotEmpty ? _selectedFactors.toList() : null,
-            images: null,
-          ),
-        );
-
         // Navigate to result screen
         Get.toNamed(AppRoutes.diagnosisResult);
       } else {
@@ -81,6 +99,18 @@ class _DiagnosisScreenState extends State<DiagnosisScreen> {
           colorText: Colors.white,
         );
       }
+    }
+  }
+
+  // Get the latest health data for the user
+  HealthDataModel? _getLatestHealthData() {
+    try {
+      // Try to get the health data controller
+      final healthDataController = Get.find<HealthDataController>();
+      return healthDataController.getLatestHealthDataSync();
+    } catch (e) {
+      debugPrint('Health data controller not available: $e');
+      return null;
     }
   }
 
@@ -264,7 +294,68 @@ class _DiagnosisScreenState extends State<DiagnosisScreen> {
                             .toList(),
                   ),
                 ),
-                const SizedBox(height: 32),
+                const SizedBox(height: 24),
+
+                // AI Model Selection
+                Card(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: BorderSide(
+                      color: AppColors.primaryColor.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'AI Model Selection',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                'Use Google Gemini AI for more accurate health information',
+                                style: TextStyle(
+                                  color: Colors.grey[700],
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ),
+                            Obx(
+                              () => Switch(
+                                value: _useGeminiAI.value,
+                                onChanged:
+                                    (value) => _useGeminiAI.value = value,
+                                activeColor: AppColors.primaryColor,
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (_useGeminiAI.value)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8.0),
+                            child: Text(
+                              'Powered by Google Gemini AI',
+                              style: TextStyle(
+                                color: AppColors.primaryColor,
+                                fontSize: 12,
+                                fontStyle: FontStyle.italic,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 24),
 
                 // Analyze button
                 Obx(

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
 import '../constants/app_colors.dart';
 
 /// Base bottom navigation bar widget that can be customized for different user types
@@ -22,7 +21,9 @@ class BottomNavBar extends StatelessWidget {
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withOpacity(0.2),
+            color: Colors.grey.withAlpha(
+              51,
+            ), // 0.2 opacity = 51 alpha (255 * 0.2)
             spreadRadius: 1,
             blurRadius: 10,
             offset: const Offset(0, -2),
@@ -78,10 +79,10 @@ class PatientBottomNavBar extends StatelessWidget {
   final Function(int) onTap;
 
   const PatientBottomNavBar({
-    Key? key,
+    super.key,
     required this.currentIndex,
     required this.onTap,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -125,10 +126,10 @@ class DoctorBottomNavBar extends StatelessWidget {
   final Function(int) onTap;
 
   const DoctorBottomNavBar({
-    Key? key,
+    super.key,
     required this.currentIndex,
     required this.onTap,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -137,9 +138,9 @@ class DoctorBottomNavBar extends StatelessWidget {
       onTap: onTap,
       items: const [
         BottomNavItem(
-          label: 'Home',
-          icon: Icons.home_outlined,
-          activeIcon: Icons.home,
+          label: 'Dashboard',
+          icon: Icons.dashboard_outlined,
+          activeIcon: Icons.dashboard,
         ),
         BottomNavItem(
           label: 'Appointments',
@@ -157,9 +158,9 @@ class DoctorBottomNavBar extends StatelessWidget {
           activeIcon: Icons.message,
         ),
         BottomNavItem(
-          label: 'Profile',
-          icon: Icons.person_outline,
-          activeIcon: Icons.person,
+          label: 'Reviews',
+          icon: Icons.star_outline,
+          activeIcon: Icons.star,
         ),
       ],
     );
@@ -172,10 +173,10 @@ class AdminBottomNavBar extends StatelessWidget {
   final Function(int) onTap;
 
   const AdminBottomNavBar({
-    Key? key,
+    super.key,
     required this.currentIndex,
     required this.onTap,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

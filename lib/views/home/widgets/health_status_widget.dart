@@ -43,7 +43,7 @@ class HealthStatusWidget extends StatelessWidget {
                 return const Center(child: CircularProgressIndicator());
               }
 
-              final latestData = healthDataController.getLatestHealthData();
+              final latestData = healthDataController.getLatestHealthDataSync();
 
               if (latestData == null) {
                 return _buildNoDataView();

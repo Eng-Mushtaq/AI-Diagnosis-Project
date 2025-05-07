@@ -1,4 +1,5 @@
 import 'package:get/get.dart';
+import 'package:flutter/material.dart';
 
 import '../routes/app_routes.dart';
 import '../views/splash_screen.dart';
@@ -16,6 +17,7 @@ import '../views/doctors/doctors_screen.dart';
 import '../views/doctors/doctor_details_screen.dart';
 import '../views/appointments/appointments_screen.dart';
 import '../views/appointments/book_appointment_screen.dart';
+import '../views/appointments/appointment_detail_screen.dart';
 import '../views/symptoms/symptoms_screen.dart';
 import '../views/profile/profile_screen.dart';
 import '../views/profile/edit_profile_screen.dart';
@@ -26,9 +28,16 @@ import '../views/patients/patient_details_screen.dart';
 import '../views/messages/messages_screen.dart';
 import '../views/admin/admin_users_screen.dart';
 import '../views/admin/admin_doctors_screen.dart';
-import '../views/admin/admin_messages_screen.dart';
-import '../views/admin/admin_settings_screen.dart';
+import '../views/admin/admin_messages_screen_new.dart';
+import '../views/admin/admin_settings_screen_new.dart';
 import '../views/lab_results/lab_results_screen.dart';
+import '../views/profile/doctor_time_slots_screen.dart';
+import '../views/profile/doctor_qualifications_screen.dart';
+import '../views/profile/doctor_verification_screen.dart';
+import '../views/doctor/doctor_dashboard_screen.dart';
+import '../views/doctor/doctor_patients_screen.dart';
+import '../views/doctor/doctor_reviews_screen.dart';
+import '../views/doctor/video_call_screen.dart';
 
 class AppPages {
   static final List<GetPage> pages = [
@@ -71,6 +80,18 @@ class AppPages {
       name: AppRoutes.doctorDetails,
       page: () => const DoctorDetailsScreen(),
     ),
+    GetPage(
+      name: AppRoutes.doctorTimeSlots,
+      page: () => const DoctorTimeSlotsScreen(),
+    ),
+    GetPage(
+      name: AppRoutes.doctorQualifications,
+      page: () => const DoctorQualificationsScreen(),
+    ),
+    GetPage(
+      name: AppRoutes.doctorVerification,
+      page: () => const DoctorVerificationScreen(),
+    ),
 
     // Appointment routes
     GetPage(
@@ -80,6 +101,10 @@ class AppPages {
     GetPage(
       name: AppRoutes.bookAppointment,
       page: () => const BookAppointmentScreen(),
+    ),
+    GetPage(
+      name: AppRoutes.appointmentDetail,
+      page: () => const AppointmentDetailScreen(),
     ),
 
     // Lab results routes
@@ -110,6 +135,27 @@ class AppPages {
 
     // Message routes
     GetPage(name: AppRoutes.messages, page: () => const MessagesScreen()),
+
+    // Doctor dashboard routes
+    GetPage(
+      name: AppRoutes.doctorDashboard,
+      page: () => const DoctorDashboardScreen(),
+    ),
+    GetPage(
+      name: AppRoutes.doctorPatients,
+      page: () => const DoctorPatientsScreen(),
+    ),
+    GetPage(
+      name: AppRoutes.doctorReviews,
+      page: () => const DoctorReviewsScreen(),
+    ),
+    // Note: VideoCallScreen requires parameters, so we'll handle it differently
+    // This is a placeholder that will be replaced with actual parameters when navigating
+    GetPage(
+      name: AppRoutes.videoCall,
+      page:
+          () => const Scaffold(body: Center(child: Text('Video Call Screen'))),
+    ),
 
     // Admin routes
     GetPage(name: AppRoutes.adminUsers, page: () => const AdminUsersScreen()),

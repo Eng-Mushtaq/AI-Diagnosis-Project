@@ -16,6 +16,14 @@ class DoctorModel {
   final double consultationFee;
   final bool isAvailableForVideo;
   final bool isAvailableForChat;
+  final String verificationStatus; // 'pending', 'approved', 'rejected'
+  final String? rejectionReason;
+  final DateTime? verificationDate;
+  final String? verifiedBy;
+
+  // Doctor-patient relationship fields
+  final String? relationshipType; // 'primary', 'specialist', 'consultant'
+  final String? relationshipNotes;
 
   DoctorModel({
     required this.id,
@@ -34,6 +42,12 @@ class DoctorModel {
     required this.consultationFee,
     required this.isAvailableForVideo,
     required this.isAvailableForChat,
+    this.verificationStatus = 'pending',
+    this.rejectionReason,
+    this.verificationDate,
+    this.verifiedBy,
+    this.relationshipType,
+    this.relationshipNotes,
   });
 
   // Convert model to JSON
@@ -55,6 +69,12 @@ class DoctorModel {
       'consultationFee': consultationFee,
       'isAvailableForVideo': isAvailableForVideo,
       'isAvailableForChat': isAvailableForChat,
+      'verificationStatus': verificationStatus,
+      'rejectionReason': rejectionReason,
+      'verificationDate': verificationDate?.toIso8601String(),
+      'verifiedBy': verifiedBy,
+      'relationshipType': relationshipType,
+      'relationshipNotes': relationshipNotes,
     };
   }
 
@@ -70,28 +90,38 @@ class DoctorModel {
       rating: json['rating'].toDouble(),
       experience: json['experience'],
       about: json['about'],
-      languages: json['languages'] != null
-          ? List<String>.from(json['languages'])
-          : null,
-      qualifications: json['qualifications'] != null
-          ? List<String>.from(json['qualifications'])
-          : null,
-      availableDays: json['availableDays'] != null
-          ? List<String>.from(json['availableDays'])
-          : null,
-      availableTimeSlots: json['availableTimeSlots'] != null
-          ? Map<String, List<String>>.from(
-              json['availableTimeSlots'].map(
-                (key, value) => MapEntry(
-                  key,
-                  List<String>.from(value),
+      languages:
+          json['languages'] != null
+              ? List<String>.from(json['languages'])
+              : null,
+      qualifications:
+          json['qualifications'] != null
+              ? List<String>.from(json['qualifications'])
+              : null,
+      availableDays:
+          json['availableDays'] != null
+              ? List<String>.from(json['availableDays'])
+              : null,
+      availableTimeSlots:
+          json['availableTimeSlots'] != null
+              ? Map<String, List<String>>.from(
+                json['availableTimeSlots'].map(
+                  (key, value) => MapEntry(key, List<String>.from(value)),
                 ),
-              ),
-            )
-          : null,
+              )
+              : null,
       consultationFee: json['consultationFee'].toDouble(),
       isAvailableForVideo: json['isAvailableForVideo'],
       isAvailableForChat: json['isAvailableForChat'],
+      verificationStatus: json['verificationStatus'] ?? 'pending',
+      rejectionReason: json['rejectionReason'],
+      verificationDate:
+          json['verificationDate'] != null
+              ? DateTime.parse(json['verificationDate'])
+              : null,
+      verifiedBy: json['verifiedBy'],
+      relationshipType: json['relationshipType'],
+      relationshipNotes: json['relationshipNotes'],
     );
   }
 
@@ -123,6 +153,12 @@ class DoctorModel {
     double? consultationFee,
     bool? isAvailableForVideo,
     bool? isAvailableForChat,
+    String? verificationStatus,
+    String? rejectionReason,
+    DateTime? verificationDate,
+    String? verifiedBy,
+    String? relationshipType,
+    String? relationshipNotes,
   }) {
     return DoctorModel(
       id: id ?? this.id,
@@ -141,6 +177,12 @@ class DoctorModel {
       consultationFee: consultationFee ?? this.consultationFee,
       isAvailableForVideo: isAvailableForVideo ?? this.isAvailableForVideo,
       isAvailableForChat: isAvailableForChat ?? this.isAvailableForChat,
+      verificationStatus: verificationStatus ?? this.verificationStatus,
+      rejectionReason: rejectionReason ?? this.rejectionReason,
+      verificationDate: verificationDate ?? this.verificationDate,
+      verifiedBy: verifiedBy ?? this.verifiedBy,
+      relationshipType: relationshipType ?? this.relationshipType,
+      relationshipNotes: relationshipNotes ?? this.relationshipNotes,
     );
   }
 }

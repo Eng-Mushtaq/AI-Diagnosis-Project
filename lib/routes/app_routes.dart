@@ -37,10 +37,18 @@ class AppRoutes {
   // Doctor routes
   static const String doctors = '/doctors';
   static const String doctorDetails = '/doctor-details';
+  static const String doctorTimeSlots = '/doctor-time-slots';
+  static const String doctorQualifications = '/doctor-qualifications';
+  static const String doctorVerification = '/doctor-verification';
+  static const String doctorDashboard = '/doctor-dashboard';
+  static const String doctorPatients = '/doctor-patients';
+  static const String doctorReviews = '/doctor-reviews';
+  static const String videoCall = '/video-call';
 
   // Appointment routes
   static const String appointments = '/appointments';
   static const String bookAppointment = '/book-appointment';
+  static const String appointmentDetail = '/appointment-detail';
 
   // Lab results routes
   static const String labResults = '/lab-results';

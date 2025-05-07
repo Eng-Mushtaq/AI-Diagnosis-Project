@@ -38,6 +38,8 @@ class _AppointmentsScreenState extends State<AppointmentsScreen>
 
   @override
   void dispose() {
+    // Stop real-time updates when the screen is disposed
+    _appointmentController.stopAppointmentPolling();
     _tabController.dispose();
     super.dispose();
   }
@@ -49,6 +51,9 @@ class _AppointmentsScreenState extends State<AppointmentsScreen>
         _authController.user!.id,
       );
       await _doctorController.getAllDoctors();
+      
+      // Start real-time updates for appointments
+      _appointmentController.startAppointmentPolling(_authController.user!.id);
     }
   }
 
@@ -119,7 +124,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen>
                         _appointmentController.setSelectedAppointment(
                           appointment,
                         );
-                        // TODO: Navigate to appointment details
+                        Get.toNamed(AppRoutes.appointmentDetail);
                       },
                     ),
                   );
@@ -168,7 +173,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen>
                         _appointmentController.setSelectedAppointment(
                           appointment,
                         );
-                        // TODO: Navigate to appointment details
+                        Get.toNamed(AppRoutes.appointmentDetail);
                       },
                     ),
                   );

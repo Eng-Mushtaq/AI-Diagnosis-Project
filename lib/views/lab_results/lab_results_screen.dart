@@ -11,41 +11,43 @@ import '../../widgets/custom_loading_indicator.dart';
 import '../../widgets/bottom_nav_bar.dart';
 
 class LabResultsScreen extends StatefulWidget {
-  const LabResultsScreen({Key? key}) : super(key: key);
+  const LabResultsScreen({super.key});
 
   @override
   State<LabResultsScreen> createState() => _LabResultsScreenState();
 }
 
-class _LabResultsScreenState extends State<LabResultsScreen> with SingleTickerProviderStateMixin {
+class _LabResultsScreenState extends State<LabResultsScreen>
+    with SingleTickerProviderStateMixin {
   final AuthController _authController = Get.find<AuthController>();
-  final PatientNavigationController _navigationController = Get.find<PatientNavigationController>();
-  
+  final PatientNavigationController _navigationController =
+      Get.find<PatientNavigationController>();
+
   late TabController _tabController;
   final RxBool _isLoading = false.obs;
   final RxList<LabResult> _labResults = <LabResult>[].obs;
-  
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _loadLabResults();
   }
-  
+
   @override
   void dispose() {
     _tabController.dispose();
     super.dispose();
   }
-  
+
   // Load lab results
   Future<void> _loadLabResults() async {
     _isLoading.value = true;
-    
+
     try {
       // Simulate API call
       await Future.delayed(const Duration(seconds: 1));
-      
+
       // Mock data
       final List<LabResult> mockResults = [
         LabResult(
@@ -146,7 +148,7 @@ class _LabResultsScreenState extends State<LabResultsScreen> with SingleTickerPr
           ],
         ),
       ];
-      
+
       _labResults.assignAll(mockResults);
     } catch (e) {
       Get.snackbar(
@@ -160,7 +162,7 @@ class _LabResultsScreenState extends State<LabResultsScreen> with SingleTickerPr
       _isLoading.value = false;
     }
   }
-  
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -168,10 +170,7 @@ class _LabResultsScreenState extends State<LabResultsScreen> with SingleTickerPr
         title: const Text('Lab Results'),
         bottom: TabBar(
           controller: _tabController,
-          tabs: const [
-            Tab(text: 'All Results'),
-            Tab(text: 'Abnormal'),
-          ],
+          tabs: const [Tab(text: 'All Results'), Tab(text: 'Abnormal')],
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white70,
           indicatorColor: Colors.white,
@@ -187,7 +186,7 @@ class _LabResultsScreenState extends State<LabResultsScreen> with SingleTickerPr
         if (_isLoading.value) {
           return const CustomLoadingIndicator();
         }
-        
+
         if (_labResults.isEmpty) {
           return const EmptyState(
             icon: Icons.science,
@@ -195,17 +194,19 @@ class _LabResultsScreenState extends State<LabResultsScreen> with SingleTickerPr
             message: 'You don\'t have any lab results yet.',
           );
         }
-        
+
         return TabBarView(
           controller: _tabController,
           children: [
             // All results tab
             _buildLabResultsList(_labResults),
-            
+
             // Abnormal results tab
-            _buildLabResultsList(_labResults.where(
-              (result) => result.status == LabResultStatus.abnormal
-            ).toList()),
+            _buildLabResultsList(
+              _labResults
+                  .where((result) => result.status == LabResultStatus.abnormal)
+                  .toList(),
+            ),
           ],
         );
       }),
@@ -228,7 +229,7 @@ class _LabResultsScreenState extends State<LabResultsScreen> with SingleTickerPr
       ),
     );
   }
-  
+
   // Build lab results list
   Widget _buildLabResultsList(List<LabResult> results) {
     if (results.isEmpty) {
@@ -238,7 +239,7 @@ class _LabResultsScreenState extends State<LabResultsScreen> with SingleTickerPr
         message: 'You don\'t have any abnormal lab results.',
       );
     }
-    
+
     return ListView.builder(
       itemCount: results.length,
       padding: const EdgeInsets.all(16),
@@ -248,7 +249,7 @@ class _LabResultsScreenState extends State<LabResultsScreen> with SingleTickerPr
       },
     );
   }
-  
+
   // Build lab result card
   Widget _buildLabResultCard(LabResult result) {
     return Card(
@@ -265,9 +266,10 @@ class _LabResultsScreenState extends State<LabResultsScreen> with SingleTickerPr
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: result.status == LabResultStatus.normal
-                    ? Colors.green.withOpacity(0.1)
-                    : Colors.red.withOpacity(0.1),
+                color:
+                    result.status == LabResultStatus.normal
+                        ? Colors.green.withOpacity(0.1)
+                        : Colors.red.withOpacity(0.1),
                 borderRadius: const BorderRadius.only(
                   topLeft: Radius.circular(12),
                   topRight: Radius.circular(12),
@@ -279,9 +281,10 @@ class _LabResultsScreenState extends State<LabResultsScreen> with SingleTickerPr
                     result.status == LabResultStatus.normal
                         ? Icons.check_circle
                         : Icons.warning,
-                    color: result.status == LabResultStatus.normal
-                        ? Colors.green
-                        : Colors.red,
+                    color:
+                        result.status == LabResultStatus.normal
+                            ? Colors.green
+                            : Colors.red,
                   ),
                   const SizedBox(width: 8),
                   Expanded(
@@ -312,9 +315,10 @@ class _LabResultsScreenState extends State<LabResultsScreen> with SingleTickerPr
                       vertical: 6,
                     ),
                     decoration: BoxDecoration(
-                      color: result.status == LabResultStatus.normal
-                          ? Colors.green
-                          : Colors.red,
+                      color:
+                          result.status == LabResultStatus.normal
+                              ? Colors.green
+                              : Colors.red,
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
@@ -331,7 +335,7 @@ class _LabResultsScreenState extends State<LabResultsScreen> with SingleTickerPr
                 ],
               ),
             ),
-            
+
             // Content
             Padding(
               padding: const EdgeInsets.all(16),
@@ -345,10 +349,7 @@ class _LabResultsScreenState extends State<LabResultsScreen> with SingleTickerPr
                   const SizedBox(height: 8),
                   Text(
                     '${result.items.length} items',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[600],
-                    ),
+                    style: TextStyle(fontSize: 14, color: Colors.grey[600]),
                   ),
                   const SizedBox(height: 16),
                   Row(
@@ -363,7 +364,10 @@ class _LabResultsScreenState extends State<LabResultsScreen> with SingleTickerPr
                       ),
                       const SizedBox(width: 8),
                       IconButton(
-                        icon: const Icon(Icons.share, color: AppColors.primaryColor),
+                        icon: const Icon(
+                          Icons.share,
+                          color: AppColors.primaryColor,
+                        ),
                         onPressed: () {
                           Get.snackbar(
                             'Coming Soon',
@@ -373,7 +377,10 @@ class _LabResultsScreenState extends State<LabResultsScreen> with SingleTickerPr
                         },
                       ),
                       IconButton(
-                        icon: const Icon(Icons.download, color: AppColors.primaryColor),
+                        icon: const Icon(
+                          Icons.download,
+                          color: AppColors.primaryColor,
+                        ),
                         onPressed: () {
                           Get.snackbar(
                             'Coming Soon',
@@ -392,7 +399,7 @@ class _LabResultsScreenState extends State<LabResultsScreen> with SingleTickerPr
       ),
     );
   }
-  
+
   // Show lab result details
   void _showLabResultDetails(LabResult result) {
     Get.dialog(
@@ -438,15 +445,16 @@ class _LabResultsScreenState extends State<LabResultsScreen> with SingleTickerPr
                 'Status: ${result.status == LabResultStatus.normal ? 'Normal' : 'Abnormal'}',
                 style: TextStyle(
                   fontSize: 14,
-                  color: result.status == LabResultStatus.normal
-                      ? Colors.green
-                      : Colors.red,
+                  color:
+                      result.status == LabResultStatus.normal
+                          ? Colors.green
+                          : Colors.red,
                   fontWeight: FontWeight.bold,
                 ),
               ),
               const SizedBox(height: 16),
               const Divider(),
-              
+
               // Results table
               Expanded(
                 child: SingleChildScrollView(
@@ -458,16 +466,11 @@ class _LabResultsScreenState extends State<LabResultsScreen> with SingleTickerPr
                       3: FlexColumnWidth(2),
                       4: FlexColumnWidth(1),
                     },
-                    border: TableBorder.all(
-                      color: Colors.grey[300]!,
-                      width: 1,
-                    ),
+                    border: TableBorder.all(color: Colors.grey[300]!, width: 1),
                     children: [
                       // Table header
                       TableRow(
-                        decoration: BoxDecoration(
-                          color: Colors.grey[200],
-                        ),
+                        decoration: BoxDecoration(color: Colors.grey[200]),
                         children: [
                           _buildTableCell('Test', isHeader: true),
                           _buildTableCell('Result', isHeader: true),
@@ -476,29 +479,32 @@ class _LabResultsScreenState extends State<LabResultsScreen> with SingleTickerPr
                           _buildTableCell('Status', isHeader: true),
                         ],
                       ),
-                      
+
                       // Table rows
-                      ...result.items.map((item) => TableRow(
-                        children: [
-                          _buildTableCell(item.name),
-                          _buildTableCell(item.value),
-                          _buildTableCell(item.unit),
-                          _buildTableCell(item.referenceRange),
-                          _buildTableCell(
-                            item.status == LabResultStatus.normal
-                                ? 'Normal'
-                                : 'Abnormal',
-                            textColor: item.status == LabResultStatus.normal
-                                ? Colors.green
-                                : Colors.red,
-                          ),
-                        ],
-                      )),
+                      ...result.items.map(
+                        (item) => TableRow(
+                          children: [
+                            _buildTableCell(item.name),
+                            _buildTableCell(item.value),
+                            _buildTableCell(item.unit),
+                            _buildTableCell(item.referenceRange),
+                            _buildTableCell(
+                              item.status == LabResultStatus.normal
+                                  ? 'Normal'
+                                  : 'Abnormal',
+                              textColor:
+                                  item.status == LabResultStatus.normal
+                                      ? Colors.green
+                                      : Colors.red,
+                            ),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
                 ),
               ),
-              
+
               const SizedBox(height: 16),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
@@ -536,9 +542,13 @@ class _LabResultsScreenState extends State<LabResultsScreen> with SingleTickerPr
       ),
     );
   }
-  
+
   // Build table cell
-  Widget _buildTableCell(String text, {bool isHeader = false, Color? textColor}) {
+  Widget _buildTableCell(
+    String text, {
+    bool isHeader = false,
+    Color? textColor,
+  }) {
     return Padding(
       padding: const EdgeInsets.all(8.0),
       child: Text(
@@ -561,7 +571,7 @@ class LabResult {
   final String doctor;
   final LabResultStatus status;
   final List<LabResultItem> items;
-  
+
   LabResult({
     required this.id,
     required this.title,
@@ -579,7 +589,7 @@ class LabResultItem {
   final String unit;
   final String referenceRange;
   final LabResultStatus status;
-  
+
   LabResultItem({
     required this.name,
     required this.value,
@@ -590,7 +600,4 @@ class LabResultItem {
 }
 
 // Lab result status enum
-enum LabResultStatus {
-  normal,
-  abnormal,
-}
+enum LabResultStatus { normal, abnormal }

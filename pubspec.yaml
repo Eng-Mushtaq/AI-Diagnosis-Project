@@ -58,8 +58,14 @@ dependencies:
   # For simulating network delays
   async: ^2.11.0
 
-  # For future Supabase integration
-  # supabase_flutter: ^2.3.4
+  # Supabase integration
+  supabase_flutter: ^2.3.4
+
+  # HTTP for API calls
+  http: ^1.2.0
+
+  # URL launcher for opening links
+  url_launcher: ^6.2.5
 
 dev_dependencies:
   flutter_test:

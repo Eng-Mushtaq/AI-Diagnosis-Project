@@ -12,6 +12,8 @@ CREATE TYPE appointment_type AS ENUM ('video', 'chat', 'in-person');
 CREATE TYPE appointment_status AS ENUM ('scheduled', 'completed', 'cancelled');
 CREATE TYPE lab_result_status AS ENUM ('pending', 'completed', 'reviewed');
 CREATE TYPE urgency_level AS ENUM ('Low', 'Medium', 'High');
+CREATE TYPE admin_message_type AS ENUM ('announcement', 'support', 'feedback');
+CREATE TYPE admin_message_status AS ENUM ('active', 'archived', 'resolved');
 
 -- Create users table (base table for all user types)
 CREATE TABLE users (
@@ -195,6 +197,7 @@ CREATE TABLE diseases (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+
 -- Create disease symptoms table (many-to-one)
 CREATE TABLE disease_symptoms (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -322,6 +325,44 @@ CREATE TABLE message_read_status (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     UNIQUE(message_id, user_id)
+);
+
+-- Create admin messages table
+CREATE TABLE admin_messages (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    title TEXT NOT NULL,
+    content TEXT NOT NULL,
+    sender_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    recipient_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    type admin_message_type NOT NULL DEFAULT 'announcement',
+    status admin_message_status NOT NULL DEFAULT 'active',
+    is_read BOOLEAN DEFAULT FALSE,
+    read_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Create admin message attachments table
+CREATE TABLE admin_message_attachments (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    message_id UUID NOT NULL REFERENCES admin_messages(id) ON DELETE CASCADE,
+    attachment_url TEXT NOT NULL,
+    attachment_type TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Create admin settings table
+CREATE TABLE admin_settings (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    setting_key TEXT NOT NULL UNIQUE,
+    setting_value JSONB NOT NULL,
+    description TEXT,
+    category TEXT NOT NULL,
+    is_public BOOLEAN DEFAULT FALSE,
+    created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Create RLS policies for authentication
@@ -459,6 +500,88 @@ CREATE POLICY "Users can insert messages in their chats" ON messages
         )
     );
 
+-- Admin messages policies
+ALTER TABLE admin_messages ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Admins can view all admin messages" ON admin_messages
+    FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM admins WHERE id = auth.uid()
+        )
+    );
+CREATE POLICY "Users can view admin messages sent to them" ON admin_messages
+    FOR SELECT USING (
+        recipient_id = auth.uid() OR
+        recipient_id IS NULL OR
+        auth.uid() = sender_id
+    );
+CREATE POLICY "Admins can insert admin messages" ON admin_messages
+    FOR INSERT WITH CHECK (
+        auth.uid() = sender_id AND
+        EXISTS (
+            SELECT 1 FROM admins WHERE id = auth.uid()
+        )
+    );
+CREATE POLICY "Admins can update admin messages" ON admin_messages
+    FOR UPDATE USING (
+        EXISTS (
+            SELECT 1 FROM admins WHERE id = auth.uid()
+        )
+    );
+CREATE POLICY "Users can update read status of their messages" ON admin_messages
+    FOR UPDATE USING (
+        recipient_id = auth.uid() AND
+        (NEW.is_read <> OLD.is_read OR NEW.read_at <> OLD.read_at)
+    );
+
+-- Admin message attachments policies
+ALTER TABLE admin_message_attachments ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Anyone can view admin message attachments" ON admin_message_attachments
+    FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM admin_messages
+            WHERE id = admin_message_attachments.message_id AND
+            (recipient_id = auth.uid() OR recipient_id IS NULL OR
+             EXISTS (SELECT 1 FROM admins WHERE id = auth.uid()))
+        )
+    );
+CREATE POLICY "Admins can insert admin message attachments" ON admin_message_attachments
+    FOR INSERT WITH CHECK (
+        EXISTS (
+            SELECT 1 FROM admins WHERE id = auth.uid()
+        )
+    );
+
+-- Admin settings policies
+ALTER TABLE admin_settings ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Admins can view all admin settings" ON admin_settings
+    FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM admins WHERE id = auth.uid()
+        )
+    );
+CREATE POLICY "Users can view public admin settings" ON admin_settings
+    FOR SELECT USING (
+        is_public = TRUE
+    );
+CREATE POLICY "Admins can insert admin settings" ON admin_settings
+    FOR INSERT WITH CHECK (
+        EXISTS (
+            SELECT 1 FROM admins WHERE id = auth.uid()
+        )
+    );
+CREATE POLICY "Admins can update admin settings" ON admin_settings
+    FOR UPDATE USING (
+        EXISTS (
+            SELECT 1 FROM admins WHERE id = auth.uid()
+        )
+    );
+CREATE POLICY "Admins can delete admin settings" ON admin_settings
+    FOR DELETE USING (
+        EXISTS (
+            SELECT 1 FROM admins WHERE id = auth.uid()
+        )
+    );
+
 -- Create triggers for updated_at timestamps
 CREATE OR REPLACE FUNCTION trigger_set_timestamp()
 RETURNS TRIGGER AS $$
@@ -492,6 +615,16 @@ EXECUTE PROCEDURE trigger_set_timestamp();
 
 CREATE TRIGGER set_timestamp
 BEFORE UPDATE ON doctor_time_slots
+FOR EACH ROW
+EXECUTE PROCEDURE trigger_set_timestamp();
+
+CREATE TRIGGER set_timestamp
+BEFORE UPDATE ON admin_messages
+FOR EACH ROW
+EXECUTE PROCEDURE trigger_set_timestamp();
+
+CREATE TRIGGER set_timestamp
+BEFORE UPDATE ON admin_settings
 FOR EACH ROW
 EXECUTE PROCEDURE trigger_set_timestamp();
 

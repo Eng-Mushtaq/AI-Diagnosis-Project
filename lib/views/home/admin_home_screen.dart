@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../constants/app_colors.dart';
 import '../../controllers/auth_controller.dart';
+import '../../controllers/admin_controller.dart';
 import '../../controllers/navigation_controller.dart';
 import '../../routes/app_routes.dart';
 import '../../widgets/custom_button.dart';
@@ -18,12 +19,9 @@ class AdminHomeScreen extends StatefulWidget {
 
 class _AdminHomeScreenState extends State<AdminHomeScreen> {
   final AuthController _authController = Get.find<AuthController>();
+  final AdminController _adminController = Get.find<AdminController>();
   final AdminNavigationController _navigationController =
       Get.find<AdminNavigationController>();
-  final RxInt _totalUsers = 0.obs;
-  final RxInt _totalDoctors = 0.obs;
-  final RxInt _totalPatients = 0.obs;
-  final RxInt _pendingApprovals = 0.obs;
 
   @override
   void initState() {
@@ -39,12 +37,8 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
 
   // Load initial data
   Future<void> _loadData() async {
-    // Simulate loading admin dashboard data
-    await Future.delayed(const Duration(seconds: 1));
-    _totalUsers.value = 125;
-    _totalDoctors.value = 45;
-    _totalPatients.value = 80;
-    _pendingApprovals.value = 12;
+    // Load real data from Supabase
+    await _adminController.fetchDashboardStats();
   }
 
   @override
@@ -235,27 +229,31 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
         children: [
           _buildStatCard(
             title: 'Total Users',
-            value: _totalUsers.value.toString(),
+            value: _adminController.totalUsers.toString(),
             icon: Icons.people,
             color: Colors.blue,
+            isLoading: _adminController.isLoadingDashboardStats,
           ),
           _buildStatCard(
             title: 'Doctors',
-            value: _totalDoctors.value.toString(),
+            value: _adminController.totalDoctors.toString(),
             icon: Icons.medical_services,
             color: Colors.green,
+            isLoading: _adminController.isLoadingDashboardStats,
           ),
           _buildStatCard(
             title: 'Patients',
-            value: _totalPatients.value.toString(),
+            value: _adminController.totalPatients.toString(),
             icon: Icons.personal_injury,
             color: Colors.orange,
+            isLoading: _adminController.isLoadingDashboardStats,
           ),
           _buildStatCard(
             title: 'Pending Approvals',
-            value: _pendingApprovals.value.toString(),
+            value: _adminController.pendingApprovals.toString(),
             icon: Icons.approval,
             color: Colors.red,
+            isLoading: _adminController.isLoadingDashboardStats,
           ),
         ],
       ),
@@ -268,6 +266,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
     required String value,
     required IconData icon,
     required Color color,
+    bool isLoading = false,
   }) {
     return Card(
       elevation: 4,
@@ -280,14 +279,23 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
           children: [
             Icon(icon, color: color, size: 28),
             const SizedBox(height: 6),
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: color,
-              ),
-            ),
+            isLoading
+                ? SizedBox(
+                  height: 22,
+                  width: 22,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: color,
+                  ),
+                )
+                : Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: color,
+                  ),
+                ),
             const SizedBox(height: 4),
             Text(
               title,

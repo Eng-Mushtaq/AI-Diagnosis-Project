@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../constants/app_colors.dart';
-import '../../constants/app_constants.dart';
 import '../../routes/app_routes.dart';
 import '../../widgets/custom_button.dart';
 
@@ -16,30 +15,34 @@ class OnboardingScreen extends StatefulWidget {
 class _OnboardingScreenState extends State<OnboardingScreen> {
   final PageController _pageController = PageController();
   final RxInt _currentPage = 0.obs;
-  
+
   // Onboarding data with icons (not images)
   final List<Map<String, dynamic>> _onboardingData = [
     {
       'title': 'AI-Powered Diagnosis',
-      'description': 'Get instant health insights with our advanced AI diagnosis system based on your symptoms.',
+      'description':
+          'Get instant health insights with our advanced AI diagnosis system based on your symptoms.',
       'icon': Icons.medical_services,
       'color': AppColors.primaryColor,
     },
     {
       'title': 'Connect with Doctors',
-      'description': 'Consult with qualified healthcare professionals through video calls and chat.',
+      'description':
+          'Consult with qualified healthcare professionals through video calls and chat.',
       'icon': Icons.people,
       'color': AppColors.secondaryColor,
     },
     {
       'title': 'Track Your Health',
-      'description': 'Monitor your vital signs and health metrics to stay informed about your wellbeing.',
+      'description':
+          'Monitor your vital signs and health metrics to stay informed about your wellbeing.',
       'icon': Icons.favorite,
       'color': Colors.red,
     },
     {
       'title': 'Secure & Private',
-      'description': 'Your health data is encrypted and protected with the highest security standards.',
+      'description':
+          'Your health data is encrypted and protected with the highest security standards.',
       'icon': Icons.shield,
       'color': Colors.green,
     },
@@ -82,7 +85,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 child: const Text('Skip'),
               ),
             ),
-            
+
             // Page view
             Expanded(
               child: PageView.builder(
@@ -100,30 +103,36 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 },
               ),
             ),
-            
+
             // Page indicator and buttons
             Padding(
               padding: const EdgeInsets.all(24.0),
               child: Column(
                 children: [
                   // Page indicator
-                  Obx(() => Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: List.generate(
-                      _onboardingData.length,
-                      (index) => _buildPageIndicator(index == _currentPage.value),
+                  Obx(
+                    () => Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(
+                        _onboardingData.length,
+                        (index) =>
+                            _buildPageIndicator(index == _currentPage.value),
+                      ),
                     ),
-                  )),
+                  ),
                   const SizedBox(height: 32),
-                  
+
                   // Next/Get Started button
-                  Obx(() => CustomButton(
-                    text: _currentPage.value == _onboardingData.length - 1
-                        ? 'Get Started'
-                        : 'Next',
-                    onPressed: _nextPage,
-                    width: double.infinity,
-                  )),
+                  Obx(
+                    () => CustomButton(
+                      text:
+                          _currentPage.value == _onboardingData.length - 1
+                              ? 'Get Started'
+                              : 'Next',
+                      onPressed: _nextPage,
+                      width: double.infinity,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -153,25 +162,18 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               color: color.withValues(alpha: 26), // 10% opacity
               shape: BoxShape.circle,
             ),
-            child: Icon(
-              icon,
-              size: 80,
-              color: color,
-            ),
+            child: Icon(icon, size: 80, color: color),
           ),
           const SizedBox(height: 40),
-          
+
           // Title
           Text(
             title,
-            style: const TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
-            ),
+            style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 16),
-          
+
           // Description
           Text(
             description,

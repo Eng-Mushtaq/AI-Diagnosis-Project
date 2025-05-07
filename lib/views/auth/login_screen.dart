@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../constants/app_colors.dart';
 import '../../controllers/auth_controller.dart';
-import '../../models/user_model.dart';
 import '../../routes/app_routes.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_text_field.dart';
+import '../../services/supabase_service.dart';
 
 // Login screen for user authentication
 class LoginScreen extends StatefulWidget {
@@ -36,10 +38,21 @@ class _LoginScreenState extends State<LoginScreen> {
   // Handle login button press
   Future<void> _handleLogin() async {
     if (_formKey.currentState!.validate()) {
+      // Show loading indicator
+      Get.dialog(
+        const Center(child: CircularProgressIndicator()),
+        barrierDismissible: false,
+      );
+
       final success = await _authController.login(
         _emailController.text.trim(),
         _passwordController.text,
       );
+
+      // Close loading dialog
+      if (Get.isDialogOpen ?? false) {
+        Get.back();
+      }
 
       if (success) {
         // Route to different home screens based on user type
@@ -65,25 +78,48 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  // Handle social login (for future Supabase implementation)
+  // Handle social login with Supabase
   Future<void> _handleSocialLogin(String provider) async {
     _isLoggingInWithSocial.value = true;
     _socialLoginError.value = '';
 
     try {
-      // This will be replaced with actual Supabase implementation in the future
-      await Future.delayed(const Duration(seconds: 1));
+      // Get Supabase client from service
+      final supabase = SupabaseService().supabaseClient;
 
-      // For now, show a message that this feature is coming soon
+      // Determine provider
+      if (provider == 'google') {
+        await supabase.auth.signInWithOAuth(
+          OAuthProvider.google,
+          redirectTo:
+              kIsWeb ? null : 'io.supabase.aidiagnosist://login-callback/',
+        );
+      } else if (provider == 'apple') {
+        await supabase.auth.signInWithOAuth(
+          OAuthProvider.apple,
+          redirectTo:
+              kIsWeb ? null : 'io.supabase.aidiagnosist://login-callback/',
+        );
+      } else if (provider == 'facebook') {
+        await supabase.auth.signInWithOAuth(
+          OAuthProvider.facebook,
+          redirectTo:
+              kIsWeb ? null : 'io.supabase.aidiagnosist://login-callback/',
+        );
+      }
+
+      // Note: The actual login completion will be handled by deep linking
+      // For now, we'll just show a message
       Get.snackbar(
-        'Coming Soon',
-        'Social login with $provider will be implemented with Supabase',
+        'Social Login',
+        'Please complete the authentication in your browser',
         snackPosition: SnackPosition.BOTTOM,
       );
 
       _isLoggingInWithSocial.value = false;
     } catch (e) {
-      _socialLoginError.value = 'Failed to login with $provider';
+      _socialLoginError.value =
+          'Failed to login with $provider: ${e.toString()}';
       _isLoggingInWithSocial.value = false;
     }
   }
@@ -212,13 +248,90 @@ class _LoginScreenState extends State<LoginScreen> {
                   Align(
                     alignment: Alignment.centerRight,
                     child: TextButton(
-                      onPressed: () {
-                        // TODO: Implement forgot password
-                        Get.snackbar(
-                          'Forgot Password',
-                          'This feature is not implemented yet',
-                          snackPosition: SnackPosition.BOTTOM,
+                      onPressed: () async {
+                        // Show dialog to enter email
+                        final TextEditingController emailController =
+                            TextEditingController();
+                        final result = await Get.dialog<bool>(
+                          AlertDialog(
+                            title: const Text('Reset Password'),
+                            content: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Text(
+                                  'Enter your email to receive a password reset link',
+                                ),
+                                const SizedBox(height: 16),
+                                CustomTextField(
+                                  label: 'Email',
+                                  hint: 'Enter your email',
+                                  controller: emailController,
+                                  keyboardType: TextInputType.emailAddress,
+                                  prefixIcon: Icons.email,
+                                  validator: (value) {
+                                    if (value == null || value.isEmpty) {
+                                      return 'Please enter your email';
+                                    }
+                                    if (!GetUtils.isEmail(value)) {
+                                      return 'Please enter a valid email';
+                                    }
+                                    return null;
+                                  },
+                                ),
+                              ],
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Get.back(result: false),
+                                child: const Text('Cancel'),
+                              ),
+                              TextButton(
+                                onPressed: () => Get.back(result: true),
+                                child: const Text('Send Reset Link'),
+                              ),
+                            ],
+                          ),
                         );
+
+                        if (result == true && emailController.text.isNotEmpty) {
+                          try {
+                            // Show loading indicator
+                            Get.dialog(
+                              const Center(child: CircularProgressIndicator()),
+                              barrierDismissible: false,
+                            );
+
+                            await SupabaseService().resetPassword(
+                              emailController.text.trim(),
+                            );
+
+                            // Close loading dialog
+                            if (Get.isDialogOpen ?? false) {
+                              Get.back();
+                            }
+
+                            Get.snackbar(
+                              'Password Reset',
+                              'A password reset link has been sent to your email',
+                              snackPosition: SnackPosition.BOTTOM,
+                              backgroundColor: Colors.green,
+                              colorText: Colors.white,
+                            );
+                          } catch (e) {
+                            // Close loading dialog if it's still open
+                            if (Get.isDialogOpen ?? false) {
+                              Get.back();
+                            }
+
+                            Get.snackbar(
+                              'Error',
+                              'Failed to send password reset link: ${e.toString()}',
+                              snackPosition: SnackPosition.BOTTOM,
+                              backgroundColor: AppColors.errorColor,
+                              colorText: Colors.white,
+                            );
+                          }
+                        }
                       },
                       child: const Text('Forgot Password?'),
                     ),
@@ -308,7 +421,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'Patient: patient@example.com\nDoctor: doctor@example.com\nAdmin: admin@example.com\n\nPassword: 123456',
+                    'Patient: patient@example.com\nDoctor: doctor@example.com\nAdmin: admin@gmail.com\n\nPassword: 123456 (for patient/doctor)\nPassword: admin123 (for admin)',
                     style: TextStyle(fontSize: 14, color: Colors.grey),
                     textAlign: TextAlign.center,
                   ),

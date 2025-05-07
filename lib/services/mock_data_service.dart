@@ -647,17 +647,26 @@ class MockDataService {
 
   // Get all doctors
   Future<List<DoctorModel>> getAllDoctors() async {
-    return _simulateApiCall(_doctors);
+    // Add verification status to mock doctors (all approved for simplicity)
+    final approvedDoctors =
+        _doctors.map((doctor) {
+          return doctor.copyWith(verificationStatus: 'approved');
+        }).toList();
+
+    return _simulateApiCall(approvedDoctors);
   }
 
   // Get doctors by specialization
   Future<List<DoctorModel>> getDoctorsBySpecialization(
     String specialization,
   ) async {
+    // Filter by specialization and set all as approved
     final filteredDoctors =
         _doctors
             .where((doctor) => doctor.specialization == specialization)
+            .map((doctor) => doctor.copyWith(verificationStatus: 'approved'))
             .toList();
+
     return _simulateApiCall(filteredDoctors);
   }
 
@@ -665,7 +674,9 @@ class MockDataService {
   Future<DoctorModel?> getDoctorById(String id) async {
     try {
       final doctor = _doctors.firstWhere((doctor) => doctor.id == id);
-      return _simulateApiCall(doctor);
+      // Set verification status to approved
+      final approvedDoctor = doctor.copyWith(verificationStatus: 'approved');
+      return _simulateApiCall(approvedDoctor);
     } catch (e) {
       return _simulateApiCall(null);
     }
@@ -712,6 +723,30 @@ class MockDataService {
             .where((appointment) => appointment.userId == userId)
             .toList();
     return _simulateApiCall(userAppointments);
+  }
+
+  // Get appointments for doctor
+  Future<List<AppointmentModel>> getDoctorAppointments(String doctorId) async {
+    final doctorAppointments =
+        _appointments
+            .where((appointment) => appointment.doctorId == doctorId)
+            .toList();
+
+    // Add patient names to appointments
+    for (final appointment in doctorAppointments) {
+      try {
+        final patient = _patientUser;
+        if (patient.id == appointment.userId) {
+          appointment.patientName = patient.name;
+        } else {
+          appointment.patientName = 'Patient';
+        }
+      } catch (e) {
+        appointment.patientName = 'Unknown Patient';
+      }
+    }
+
+    return _simulateApiCall(doctorAppointments);
   }
 
   // Book appointment
@@ -1092,6 +1127,16 @@ class MockDataService {
     userChats.sort((a, b) => b.lastMessageAt.compareTo(a.lastMessageAt));
 
     return _simulateApiCall(userChats);
+  }
+
+  // Get chat by ID
+  Future<ChatModel?> getChatById(String chatId) async {
+    try {
+      final chat = _chats.firstWhere((chat) => chat.id == chatId);
+      return _simulateApiCall(chat);
+    } catch (e) {
+      return _simulateApiCall(null);
+    }
   }
 
   // Get messages for chat

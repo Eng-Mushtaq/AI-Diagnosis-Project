@@ -58,20 +58,20 @@ class DoctorNavigationController extends NavigationController {
     // Use a post-frame callback to ensure navigation happens after the build phase
     WidgetsBinding.instance.addPostFrameCallback((_) {
       switch (index) {
-        case 0: // Home
-          Get.offAllNamed(AppRoutes.doctorHome);
+        case 0: // Dashboard
+          Get.offAllNamed(AppRoutes.doctorDashboard);
           break;
         case 1: // Appointments
           Get.toNamed(AppRoutes.appointments);
           break;
         case 2: // Patients
-          Get.toNamed(AppRoutes.patients);
+          Get.toNamed(AppRoutes.doctorPatients);
           break;
         case 3: // Messages
           Get.toNamed(AppRoutes.messages);
           break;
-        case 4: // Profile
-          Get.toNamed(AppRoutes.doctorProfile);
+        case 4: // Reviews
+          Get.toNamed(AppRoutes.doctorReviews);
           break;
       }
     });

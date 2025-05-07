@@ -101,7 +101,7 @@ class _DiagnosisResultScreenState extends State<DiagnosisResultScreen> {
                       disease: disease,
                       index: index,
                       onTap: () {
-                        // TODO: Show disease details
+                        _showDiseaseDetails(disease);
                       },
                     ),
                   );
@@ -405,5 +405,180 @@ class _DiagnosisResultScreenState extends State<DiagnosisResultScreen> {
     if (probability < 0.3) return AppColors.successColor;
     if (probability < 0.7) return AppColors.warningColor;
     return AppColors.errorColor;
+  }
+
+  // Show detailed information about a disease
+  void _showDiseaseDetails(DiseaseWithProbability disease) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.7,
+          maxChildSize: 0.9,
+          minChildSize: 0.5,
+          expand: false,
+          builder: (context, scrollController) {
+            return SingleChildScrollView(
+              controller: scrollController,
+              child: Padding(
+                padding: const EdgeInsets.all(20.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Disease name and probability
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            disease.name,
+                            style: const TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: _getProbabilityColor(
+                              disease.probability,
+                            ).withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Text(
+                            disease.probabilityPercentage,
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: _getProbabilityColor(disease.probability),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Disease description
+                    if (disease.description != null) ...[
+                      const Text(
+                        'Description',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        disease.description!,
+                        style: const TextStyle(fontSize: 16),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+
+                    // Common symptoms
+                    if (disease.symptoms != null &&
+                        disease.symptoms!.isNotEmpty) ...[
+                      const Text(
+                        'Common Symptoms',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      ...disease.symptoms!.map(
+                        (symptom) => Padding(
+                          padding: const EdgeInsets.only(bottom: 4.0),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Icon(
+                                Icons.circle,
+                                size: 8,
+                                color: Colors.grey,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  symptom,
+                                  style: const TextStyle(fontSize: 16),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+
+                    // Recommended specialist
+                    if (disease.specialistType != null) ...[
+                      const Text(
+                        'Recommended Specialist',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Icon(Icons.person, color: AppColors.primaryColor),
+                          const SizedBox(width: 8),
+                          Text(
+                            disease.specialistType!,
+                            style: const TextStyle(fontSize: 16),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+
+                    // Action buttons
+                    Row(
+                      children: [
+                        Expanded(
+                          child: CustomButton(
+                            text: 'Find ${disease.specialistType ?? 'Doctor'}',
+                            icon: Icons.search,
+                            onPressed: () {
+                              Navigator.pop(context);
+                              if (disease.specialistType != null) {
+                                _doctorController.getDoctorsBySpecialization(
+                                  disease.specialistType!,
+                                );
+                              }
+                              Get.toNamed(AppRoutes.doctors);
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Disclaimer
+                    const Text(
+                      'Disclaimer: This information is for educational purposes only and is not a substitute for professional medical advice.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 }

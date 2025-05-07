@@ -10,7 +10,6 @@ import '../../controllers/doctor_controller.dart';
 import '../../controllers/patient_controller.dart';
 import '../../models/chat_model.dart';
 import '../../models/user_model.dart';
-import '../../routes/app_routes.dart';
 import '../../widgets/custom_loading_indicator.dart';
 import '../../widgets/empty_state.dart';
 import 'chat_detail_screen.dart';

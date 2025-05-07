@@ -32,7 +32,8 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
 
     // Use post-frame callback to ensure loading happens after the build phase
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadData();
+      // Redirect to the new dashboard
+      Get.offAllNamed(AppRoutes.doctorDashboard);
     });
   }
 

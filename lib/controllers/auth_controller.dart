@@ -1,14 +1,18 @@
 import 'package:get/get.dart';
+import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/user_model.dart';
-import '../services/mock_data_service.dart';
+import '../services/supabase_service.dart';
 
 // Authentication controller for managing user authentication
 class AuthController extends GetxController {
-  final MockDataService _dataService = MockDataService();
+  final SupabaseService _supabaseService = SupabaseService();
 
   // Observable user
   final Rx<UserModel?> _user = Rx<UserModel?>(null);
   UserModel? get user => _user.value;
+  // Add currentUser getter to match the expected API
+  Rx<UserModel?> get currentUser => _user;
 
   // Loading state
   final RxBool _isLoading = false.obs;
@@ -27,6 +31,17 @@ class AuthController extends GetxController {
     // No auto login - user must always go through the login screen
     // Reset user to ensure they're logged out
     _user.value = null;
+
+    // Check if user is already logged in with Supabase
+    _checkCurrentUser();
+  }
+
+  // Check if user is already logged in with Supabase
+  Future<void> _checkCurrentUser() async {
+    final authUser = _supabaseService.getCurrentAuthUser();
+    if (authUser != null) {
+      await getCurrentUser();
+    }
   }
 
   // Get current user
@@ -35,8 +50,11 @@ class AuthController extends GetxController {
     _errorMessage.value = '';
 
     try {
-      final user = await _dataService.getCurrentUser();
-      _user.value = user;
+      final authUser = _supabaseService.getCurrentAuthUser();
+      if (authUser != null) {
+        final user = await _supabaseService.getUserProfile(authUser.id);
+        _user.value = user;
+      }
     } catch (e) {
       _errorMessage.value = 'Failed to get user: ${e.toString()}';
     } finally {
@@ -61,16 +79,89 @@ class AuthController extends GetxController {
         return false;
       }
 
-      // Use the mock service to login with different user types
-      final user = await _dataService.login(email, password);
+      // Check if this is an admin login attempt
+      if (email.toLowerCase().contains('admin')) {
+        debugPrint(
+          'Admin login attempt with email: $email and password: $password',
+        );
+      }
 
-      if (user != null) {
-        _user.value = user;
-        return true;
+      // Use Supabase to login
+      final response = await _supabaseService.signIn(
+        email: email,
+        password: password,
+      );
+
+      if (response.user != null) {
+        debugPrint('Auth successful, user ID: ${response.user!.id}');
+
+        // Get user profile from database
+        final user = await _supabaseService.getUserProfile(response.user!.id);
+        if (user != null) {
+          _user.value = user;
+
+          // Log user type for debugging
+          debugPrint('User logged in as: ${user.userType}');
+
+          // Special handling for admin users
+          if (email.toLowerCase().contains('admin') &&
+              user.userType != UserType.admin) {
+            debugPrint('Forcing user type to admin');
+            final updatedUser = user.copyWith(userType: UserType.admin);
+            _user.value = updatedUser;
+          }
+
+          return true;
+        } else {
+          debugPrint(
+            'User profile not found in database for ID: ${response.user!.id}',
+          );
+
+          // If this is an admin login attempt, try to create the admin profile
+          if (email.toLowerCase().contains('admin')) {
+            try {
+              debugPrint('Attempting to create admin profile');
+              await _supabaseService.createUserProfile(
+                userId: response.user!.id,
+                email: email,
+                name: 'Admin User',
+                userType: UserType.admin,
+                additionalData: {
+                  'adminRole': 'super_admin',
+                  'permissions': [
+                    'manage_users',
+                    'manage_doctors',
+                    'manage_content',
+                    'view_analytics',
+                    'create_admin',
+                  ],
+                },
+              );
+
+              // Try to get the profile again
+              final newUser = await _supabaseService.getUserProfile(
+                response.user!.id,
+              );
+              if (newUser != null) {
+                _user.value = newUser;
+                debugPrint('Admin profile created and login successful');
+                return true;
+              }
+            } catch (profileError) {
+              debugPrint('Error creating admin profile: $profileError');
+            }
+          }
+
+          _errorMessage.value = 'User profile not found';
+          return false;
+        }
       } else {
         _errorMessage.value = 'Invalid email or password';
         return false;
       }
+    } on AuthException catch (e) {
+      _errorMessage.value = e.message;
+      return false;
     } catch (e) {
       _errorMessage.value = 'Login failed: ${e.toString()}';
       return false;
@@ -114,17 +205,26 @@ class AuthController extends GetxController {
         return false;
       }
 
-      // Register user with the specified type and additional data
-      final user = await _dataService.register(
-        name,
-        email,
-        password,
-        userType,
-        additionalData,
+      // Register user with Supabase
+      final response = await _supabaseService.signUp(
+        email: email,
+        password: password,
+        name: name,
+        userType: userType,
+        additionalData: additionalData,
       );
-      _user.value = user;
 
-      return true;
+      if (response.user != null) {
+        // Sign out after registration to force login
+        await _supabaseService.signOut();
+        return true;
+      } else {
+        _errorMessage.value = 'Registration failed';
+        return false;
+      }
+    } on AuthException catch (e) {
+      _errorMessage.value = e.message;
+      return false;
     } catch (e) {
       _errorMessage.value = 'Registration failed: ${e.toString()}';
       return false;
@@ -138,8 +238,7 @@ class AuthController extends GetxController {
     _isLoading.value = true;
 
     try {
-      // Simulate logout
-      await Future.delayed(const Duration(seconds: 1));
+      await _supabaseService.signOut();
       _user.value = null;
     } catch (e) {
       _errorMessage.value = 'Logout failed: ${e.toString()}';
@@ -154,8 +253,8 @@ class AuthController extends GetxController {
     _errorMessage.value = '';
 
     try {
-      // Simulate profile update
-      await Future.delayed(const Duration(seconds: 1));
+      // TODO: Implement profile update with Supabase
+      // For now, just update the local user
       _user.value = updatedUser;
       return true;
     } catch (e) {

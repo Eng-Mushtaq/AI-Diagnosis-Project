@@ -28,10 +28,18 @@ class UserModel {
   final List<String>? qualifications;
   final bool? isAvailableForChat;
   final bool? isAvailableForVideo;
+  final String? verificationStatus; // 'pending', 'approved', 'rejected'
+  final String? rejectionReason;
+  final DateTime? verificationDate;
+  final String? verifiedBy;
 
   // Admin-specific fields
   final String? adminRole; // e.g., "super_admin", "content_admin", etc.
   final List<String>? permissions;
+
+  // Doctor-patient relationship fields
+  final String? relationshipType; // 'primary', 'specialist', 'consultant'
+  final String? relationshipNotes;
 
   UserModel({
     required this.id,
@@ -57,9 +65,16 @@ class UserModel {
     this.qualifications,
     this.isAvailableForChat,
     this.isAvailableForVideo,
+    this.verificationStatus,
+    this.rejectionReason,
+    this.verificationDate,
+    this.verifiedBy,
     // Admin fields
     this.adminRole,
     this.permissions,
+    // Relationship fields
+    this.relationshipType,
+    this.relationshipNotes,
   });
 
   // Convert model to JSON
@@ -80,8 +95,9 @@ class UserModel {
     if (height != null) data['height'] = height;
     if (weight != null) data['weight'] = weight;
     if (allergies != null) data['allergies'] = allergies;
-    if (chronicConditions != null)
+    if (chronicConditions != null) {
       data['chronicConditions'] = chronicConditions;
+    }
     if (medications != null) data['medications'] = medications;
 
     // Add doctor fields if present
@@ -90,14 +106,34 @@ class UserModel {
     if (licenseNumber != null) data['licenseNumber'] = licenseNumber;
     if (experience != null) data['experience'] = experience;
     if (qualifications != null) data['qualifications'] = qualifications;
-    if (isAvailableForChat != null)
+    if (isAvailableForChat != null) {
       data['isAvailableForChat'] = isAvailableForChat;
-    if (isAvailableForVideo != null)
+    }
+    if (isAvailableForVideo != null) {
       data['isAvailableForVideo'] = isAvailableForVideo;
+    }
+    if (verificationStatus != null) {
+      data['verificationStatus'] = verificationStatus;
+    }
+    if (rejectionReason != null) {
+      data['rejectionReason'] = rejectionReason;
+    }
+    if (verificationDate != null) {
+      data['verificationDate'] = verificationDate!.toIso8601String();
+    }
+    if (verifiedBy != null) {
+      data['verifiedBy'] = verifiedBy;
+    }
 
     // Add admin fields if present
     if (adminRole != null) data['adminRole'] = adminRole;
     if (permissions != null) data['permissions'] = permissions;
+
+    // Add relationship fields if present
+    if (relationshipType != null) data['relationshipType'] = relationshipType;
+    if (relationshipNotes != null) {
+      data['relationshipNotes'] = relationshipNotes;
+    }
 
     return data;
   }
@@ -121,8 +157,8 @@ class UserModel {
       age: json['age'],
       gender: json['gender'],
       bloodGroup: json['bloodGroup'],
-      height: json['height'] != null ? json['height'].toDouble() : null,
-      weight: json['weight'] != null ? json['weight'].toDouble() : null,
+      height: json['height']?.toDouble(),
+      weight: json['weight']?.toDouble(),
       allergies:
           json['allergies'] != null
               ? List<String>.from(json['allergies'])
@@ -146,12 +182,22 @@ class UserModel {
               : null,
       isAvailableForChat: json['isAvailableForChat'],
       isAvailableForVideo: json['isAvailableForVideo'],
+      verificationStatus: json['verificationStatus'],
+      rejectionReason: json['rejectionReason'],
+      verificationDate:
+          json['verificationDate'] != null
+              ? DateTime.parse(json['verificationDate'])
+              : null,
+      verifiedBy: json['verifiedBy'],
       // Admin fields
       adminRole: json['adminRole'],
       permissions:
           json['permissions'] != null
               ? List<String>.from(json['permissions'])
               : null,
+      // Relationship fields
+      relationshipType: json['relationshipType'],
+      relationshipNotes: json['relationshipNotes'],
     );
   }
 
@@ -180,9 +226,17 @@ class UserModel {
     List<String>? qualifications,
     bool? isAvailableForChat,
     bool? isAvailableForVideo,
+    String? verificationStatus,
+    String? rejectionReason,
+    DateTime? verificationDate,
+    String? verifiedBy,
     // Admin fields
     String? adminRole,
     List<String>? permissions,
+    // Relationship fields
+    String? relationshipType,
+    String? relationshipNotes,
+    Map<String, dynamic>? additionalData,
   }) {
     return UserModel(
       id: id ?? this.id,
@@ -208,9 +262,24 @@ class UserModel {
       qualifications: qualifications ?? this.qualifications,
       isAvailableForChat: isAvailableForChat ?? this.isAvailableForChat,
       isAvailableForVideo: isAvailableForVideo ?? this.isAvailableForVideo,
+      verificationStatus: verificationStatus ?? this.verificationStatus,
+      rejectionReason: rejectionReason ?? this.rejectionReason,
+      verificationDate: verificationDate ?? this.verificationDate,
+      verifiedBy: verifiedBy ?? this.verifiedBy,
       // Admin fields
       adminRole: adminRole ?? this.adminRole,
       permissions: permissions ?? this.permissions,
+      // Relationship fields
+      relationshipType:
+          relationshipType ??
+          (additionalData != null
+              ? additionalData['relationshipType']
+              : this.relationshipType),
+      relationshipNotes:
+          relationshipNotes ??
+          (additionalData != null
+              ? additionalData['relationshipNotes']
+              : this.relationshipNotes),
     );
   }
 }

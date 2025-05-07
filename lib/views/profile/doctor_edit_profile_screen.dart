@@ -5,20 +5,23 @@ import 'package:flutter/services.dart';
 import '../../constants/app_colors.dart';
 import '../../controllers/auth_controller.dart';
 import '../../controllers/profile_controller.dart';
-import '../../models/user_model.dart';
+import '../../controllers/doctor_controller.dart';
 import '../../widgets/custom_text_field.dart';
 import '../../widgets/custom_button.dart';
+import '../../routes/app_routes.dart';
 
 class DoctorEditProfileScreen extends StatefulWidget {
   const DoctorEditProfileScreen({Key? key}) : super(key: key);
 
   @override
-  State<DoctorEditProfileScreen> createState() => _DoctorEditProfileScreenState();
+  State<DoctorEditProfileScreen> createState() =>
+      _DoctorEditProfileScreenState();
 }
 
 class _DoctorEditProfileScreenState extends State<DoctorEditProfileScreen> {
   final AuthController _authController = Get.find<AuthController>();
   final ProfileController _profileController = Get.find<ProfileController>();
+  final DoctorController _doctorController = Get.find<DoctorController>();
   final _formKey = GlobalKey<FormState>();
 
   // Text controllers
@@ -38,7 +41,8 @@ class _DoctorEditProfileScreenState extends State<DoctorEditProfileScreen> {
   final RxList<String> _qualifications = <String>[].obs;
 
   // Text controller for adding new qualification
-  final TextEditingController _newQualificationController = TextEditingController();
+  final TextEditingController _newQualificationController =
+      TextEditingController();
 
   @override
   void initState() {
@@ -53,15 +57,23 @@ class _DoctorEditProfileScreenState extends State<DoctorEditProfileScreen> {
     _nameController = TextEditingController(text: user.name);
     _emailController = TextEditingController(text: user.email);
     _phoneController = TextEditingController(text: user.phone);
-    _specializationController = TextEditingController(text: user.specialization ?? '');
+    _specializationController = TextEditingController(
+      text: user.specialization ?? '',
+    );
     _hospitalController = TextEditingController(text: user.hospital ?? '');
-    _licenseNumberController = TextEditingController(text: user.licenseNumber ?? '');
-    _experienceController = TextEditingController(text: user.experience?.toString() ?? '');
+    _licenseNumberController = TextEditingController(
+      text: user.licenseNumber ?? '',
+    );
+    _experienceController = TextEditingController(
+      text: user.experience?.toString() ?? '',
+    );
 
     _isAvailableForChat = user.isAvailableForChat ?? false;
     _isAvailableForVideo = user.isAvailableForVideo ?? false;
 
-    if (user.qualifications != null) _qualifications.assignAll(user.qualifications!);
+    if (user.qualifications != null) {
+      _qualifications.assignAll(user.qualifications!);
+    }
   }
 
   @override
@@ -88,11 +100,22 @@ class _DoctorEditProfileScreenState extends State<DoctorEditProfileScreen> {
     final updatedUser = currentUser.copyWith(
       name: _nameController.text,
       phone: _phoneController.text,
-      specialization: _specializationController.text.isNotEmpty ? _specializationController.text : null,
-      hospital: _hospitalController.text.isNotEmpty ? _hospitalController.text : null,
-      licenseNumber: _licenseNumberController.text.isNotEmpty ? _licenseNumberController.text : null,
-      experience: _experienceController.text.isNotEmpty ? int.parse(_experienceController.text) : null,
-      qualifications: _qualifications.isNotEmpty ? _qualifications.toList() : null,
+      specialization:
+          _specializationController.text.isNotEmpty
+              ? _specializationController.text
+              : null,
+      hospital:
+          _hospitalController.text.isNotEmpty ? _hospitalController.text : null,
+      licenseNumber:
+          _licenseNumberController.text.isNotEmpty
+              ? _licenseNumberController.text
+              : null,
+      experience:
+          _experienceController.text.isNotEmpty
+              ? int.parse(_experienceController.text)
+              : null,
+      qualifications:
+          _qualifications.isNotEmpty ? _qualifications.toList() : null,
       isAvailableForChat: _isAvailableForChat,
       isAvailableForVideo: _isAvailableForVideo,
     );
@@ -273,13 +296,80 @@ class _DoctorEditProfileScreenState extends State<DoctorEditProfileScreen> {
                 const SizedBox(height: 24),
 
                 // Qualifications Section
-                _buildSectionHeader('Qualifications'),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _buildSectionHeader('Qualifications'),
+                    TextButton.icon(
+                      onPressed: () {
+                        // Get doctor by ID first
+                        _doctorController
+                            .getDoctorById(_authController.user!.id)
+                            .then((_) {
+                              // Navigate to the qualifications management screen
+                              Get.toNamed(AppRoutes.doctorQualifications);
+                            });
+                      },
+                      icon: const Icon(Icons.edit, size: 18),
+                      label: const Text('Manage'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.primaryColor,
+                      ),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 8),
                 _buildQualificationsList(),
                 const SizedBox(height: 24),
 
+                // Verification Section
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _buildSectionHeader('Verification'),
+                    TextButton.icon(
+                      onPressed: () {
+                        // Get doctor by ID first
+                        _doctorController
+                            .getDoctorById(_authController.user!.id)
+                            .then((_) {
+                              // Navigate to the verification screen
+                              Get.toNamed(AppRoutes.doctorVerification);
+                            });
+                      },
+                      icon: const Icon(Icons.verified_user, size: 18),
+                      label: const Text('Manage Documents'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.primaryColor,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
                 // Availability Section
-                _buildSectionHeader('Availability'),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _buildSectionHeader('Availability'),
+                    TextButton.icon(
+                      onPressed: () {
+                        // Get doctor by ID first
+                        _doctorController
+                            .getDoctorById(_authController.user!.id)
+                            .then((_) {
+                              // Navigate to the time slots management screen
+                              Get.toNamed(AppRoutes.doctorTimeSlots);
+                            });
+                      },
+                      icon: const Icon(Icons.schedule, size: 18),
+                      label: const Text('Manage Time Slots'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.primaryColor,
+                      ),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 8),
                 _buildAvailabilityToggles(),
                 const SizedBox(height: 32),
@@ -359,10 +449,7 @@ class _DoctorEditProfileScreenState extends State<DoctorEditProfileScreen> {
           ),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Get.back(),
-            child: const Text('Cancel'),
-          ),
+          TextButton(onPressed: () => Get.back(), child: const Text('Cancel')),
           TextButton(
             onPressed: () {
               if (_newQualificationController.text.isNotEmpty) {
@@ -388,14 +475,19 @@ class _DoctorEditProfileScreenState extends State<DoctorEditProfileScreen> {
           children: [
             SwitchListTile(
               title: const Text('Available for Video Consultation'),
-              subtitle: const Text('Allow patients to book video consultations with you'),
+              subtitle: const Text(
+                'Allow patients to book video consultations with you',
+              ),
               value: _isAvailableForVideo,
               onChanged: (value) {
                 setState(() {
                   _isAvailableForVideo = value;
                 });
               },
-              secondary: const Icon(Icons.videocam, color: AppColors.primaryColor),
+              secondary: const Icon(
+                Icons.videocam,
+                color: AppColors.primaryColor,
+              ),
             ),
             const Divider(),
             SwitchListTile(

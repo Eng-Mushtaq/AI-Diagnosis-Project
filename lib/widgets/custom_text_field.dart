@@ -18,6 +18,7 @@ class CustomTextField extends StatelessWidget {
   final List<TextInputFormatter>? inputFormatters;
   final Function(String)? onChanged;
   final bool enabled;
+  final bool readOnly;
   final FocusNode? focusNode;
   final TextCapitalization textCapitalization;
   final String? initialValue;
@@ -40,6 +41,7 @@ class CustomTextField extends StatelessWidget {
     this.inputFormatters,
     this.onChanged,
     this.enabled = true,
+    this.readOnly = false,
     this.focusNode,
     this.textCapitalization = TextCapitalization.none,
     this.initialValue,
@@ -72,6 +74,7 @@ class CustomTextField extends StatelessWidget {
           inputFormatters: inputFormatters,
           onChanged: onChanged,
           enabled: enabled,
+          readOnly: readOnly,
           focusNode: focusNode,
           textCapitalization: textCapitalization,
           autofocus: autofocus,

@@ -5,7 +5,6 @@ import 'package:flutter/services.dart';
 import '../../constants/app_colors.dart';
 import '../../controllers/auth_controller.dart';
 import '../../controllers/profile_controller.dart';
-import '../../models/user_model.dart';
 import '../../widgets/custom_text_field.dart';
 import '../../widgets/custom_button.dart';
 
@@ -69,8 +68,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _selectedBloodGroup = user.bloodGroup;
 
     if (user.allergies != null) _allergies.assignAll(user.allergies!);
-    if (user.chronicConditions != null)
+    if (user.chronicConditions != null) {
       _chronicConditions.assignAll(user.chronicConditions!);
+    }
     if (user.medications != null) _medications.assignAll(user.medications!);
   }
 

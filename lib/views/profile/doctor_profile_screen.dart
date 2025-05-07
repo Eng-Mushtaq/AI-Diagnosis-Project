@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 
 import '../../constants/app_colors.dart';
 import '../../controllers/auth_controller.dart';
@@ -71,7 +70,8 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
               const SizedBox(height: 16),
 
               // Qualifications Section
-              if (user.qualifications != null && user.qualifications!.isNotEmpty)
+              if (user.qualifications != null &&
+                  user.qualifications!.isNotEmpty)
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -219,30 +219,42 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: qualifications
-              .map((qualification) => Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4.0),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.school, color: AppColors.primaryColor, size: 20),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            qualification,
-                            style: const TextStyle(fontWeight: FontWeight.w500),
+          children:
+              qualifications
+                  .map(
+                    (qualification) => Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4.0),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.school,
+                            color: AppColors.primaryColor,
+                            size: 20,
                           ),
-                        ),
-                      ],
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              qualification,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ))
-              .toList(),
+                  )
+                  .toList(),
         ),
       ),
     );
   }
 
   // Build availability card
-  Widget _buildAvailabilityCard(bool isAvailableForChat, bool isAvailableForVideo) {
+  Widget _buildAvailabilityCard(
+    bool isAvailableForChat,
+    bool isAvailableForVideo,
+  ) {
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -271,15 +283,9 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
   Widget _buildAvailabilityRow(String label, IconData icon, bool isAvailable) {
     return Row(
       children: [
-        Icon(
-          icon,
-          color: isAvailable ? AppColors.primaryColor : Colors.grey,
-        ),
+        Icon(icon, color: isAvailable ? AppColors.primaryColor : Colors.grey),
         const SizedBox(width: 12),
-        Text(
-          label,
-          style: const TextStyle(fontWeight: FontWeight.w500),
-        ),
+        Text(label, style: const TextStyle(fontWeight: FontWeight.w500)),
         const Spacer(),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),

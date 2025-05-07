@@ -7,7 +7,7 @@ import '../../widgets/bottom_nav_bar.dart';
 import '../../routes/app_routes.dart';
 
 class AdminSettingsScreen extends StatefulWidget {
-  const AdminSettingsScreen({Key? key}) : super(key: key);
+  const AdminSettingsScreen({super.key});
 
   @override
   State<AdminSettingsScreen> createState() => _AdminSettingsScreenState();
