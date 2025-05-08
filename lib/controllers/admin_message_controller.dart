@@ -60,8 +60,21 @@ class AdminMessageController extends GetxController {
     try {
       final messages = await _adminMessageService.getAllAdminMessages();
       _allMessages.assignAll(messages);
+
+      if (messages.isEmpty) {
+        debugPrint('No admin messages found or table might not exist');
+      }
     } catch (e) {
-      _errorMessage.value = 'Failed to fetch messages: ${e.toString()}';
+      // Handle specific PostgrestException for missing table
+      if (e.toString().contains('PostgrestException') &&
+          (e.toString().contains('code: 42P01') ||
+              e.toString().contains('relation') &&
+                  e.toString().contains('does not exist'))) {
+        debugPrint('Admin messages table does not exist: ${e.toString()}');
+        // Don't set error message to avoid UI disruption
+      } else {
+        _errorMessage.value = 'Failed to fetch messages: ${e.toString()}';
+      }
     } finally {
       _isLoadingMessages.value = false;
     }
@@ -77,8 +90,21 @@ class AdminMessageController extends GetxController {
         AdminMessageType.announcement,
       );
       _announcements.assignAll(messages);
+
+      if (messages.isEmpty) {
+        debugPrint('No announcement messages found or table might not exist');
+      }
     } catch (e) {
-      _errorMessage.value = 'Failed to fetch announcements: ${e.toString()}';
+      // Handle specific PostgrestException for missing table
+      if (e.toString().contains('PostgrestException') &&
+          (e.toString().contains('code: 42P01') ||
+              e.toString().contains('relation') &&
+                  e.toString().contains('does not exist'))) {
+        debugPrint('Admin messages table does not exist: ${e.toString()}');
+        // Don't set error message to avoid UI disruption
+      } else {
+        _errorMessage.value = 'Failed to fetch announcements: ${e.toString()}';
+      }
     } finally {
       _isLoadingAnnouncements.value = false;
     }
@@ -94,8 +120,22 @@ class AdminMessageController extends GetxController {
         AdminMessageType.support,
       );
       _supportMessages.assignAll(messages);
+
+      if (messages.isEmpty) {
+        debugPrint('No support messages found or table might not exist');
+      }
     } catch (e) {
-      _errorMessage.value = 'Failed to fetch support messages: ${e.toString()}';
+      // Handle specific PostgrestException for missing table
+      if (e.toString().contains('PostgrestException') &&
+          (e.toString().contains('code: 42P01') ||
+              e.toString().contains('relation') &&
+                  e.toString().contains('does not exist'))) {
+        debugPrint('Admin messages table does not exist: ${e.toString()}');
+        // Don't set error message to avoid UI disruption
+      } else {
+        _errorMessage.value =
+            'Failed to fetch support messages: ${e.toString()}';
+      }
     } finally {
       _isLoadingSupportMessages.value = false;
     }
@@ -111,9 +151,22 @@ class AdminMessageController extends GetxController {
         AdminMessageType.feedback,
       );
       _feedbackMessages.assignAll(messages);
+
+      if (messages.isEmpty) {
+        debugPrint('No feedback messages found or table might not exist');
+      }
     } catch (e) {
-      _errorMessage.value =
-          'Failed to fetch feedback messages: ${e.toString()}';
+      // Handle specific PostgrestException for missing table
+      if (e.toString().contains('PostgrestException') &&
+          (e.toString().contains('code: 42P01') ||
+              e.toString().contains('relation') &&
+                  e.toString().contains('does not exist'))) {
+        debugPrint('Admin messages table does not exist: ${e.toString()}');
+        // Don't set error message to avoid UI disruption
+      } else {
+        _errorMessage.value =
+            'Failed to fetch feedback messages: ${e.toString()}';
+      }
     } finally {
       _isLoadingFeedbackMessages.value = false;
     }
@@ -162,8 +215,15 @@ class AdminMessageController extends GetxController {
         return false;
       }
     } catch (e) {
-      // Check if it's a PostgrestException with a 404 error
+      // Check if it's a PostgrestException with a 42P01 error (relation does not exist)
       if (e.toString().contains('PostgrestException') &&
+          (e.toString().contains('code: 42P01') ||
+              e.toString().contains('relation') &&
+                  e.toString().contains('does not exist'))) {
+        _errorMessage.value =
+            'The admin_messages table exists but might have a different structure than expected. Please check the database schema.';
+        debugPrint('Database table structure issue: ${e.toString()}');
+      } else if (e.toString().contains('PostgrestException') &&
           e.toString().contains('code: 404')) {
         _errorMessage.value =
             'The admin_messages table does not exist in the database. Please run the database setup script.';

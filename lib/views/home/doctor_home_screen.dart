@@ -30,11 +30,8 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
     // Reset navigation index when returning to home
     _navigationController.resetIndex();
 
-    // Use post-frame callback to ensure loading happens after the build phase
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      // Redirect to the new dashboard
-      Get.offAllNamed(AppRoutes.doctorDashboard);
-    });
+    // Load initial data
+    _loadData();
   }
 
   // Load initial data

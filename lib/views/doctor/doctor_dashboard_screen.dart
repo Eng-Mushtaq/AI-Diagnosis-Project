@@ -5,12 +5,14 @@ import '../../controllers/doctor_analytics_controller.dart';
 import '../../controllers/auth_controller.dart';
 import '../../controllers/appointment_controller.dart';
 import '../../controllers/patient_controller.dart';
+import '../../controllers/navigation_controller.dart';
 import '../../constants/app_colors.dart';
 
 import '../../widgets/empty_state.dart';
 import '../../widgets/loading_indicator.dart';
 import '../../widgets/error_message.dart';
 import '../../widgets/custom_app_bar.dart';
+import '../../widgets/bottom_nav_bar.dart';
 import 'doctor_patients_screen.dart';
 
 class DoctorDashboardScreen extends StatefulWidget {
@@ -27,6 +29,8 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
   final AppointmentController _appointmentController =
       Get.find<AppointmentController>();
   final PatientController _patientController = Get.find<PatientController>();
+  final DoctorNavigationController _navigationController =
+      Get.find<DoctorNavigationController>();
 
   final RxBool _isRefreshing = false.obs;
   final RxString _timeRange = '30 Days'.obs;
@@ -35,6 +39,8 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
   void initState() {
     super.initState();
     _loadData();
+    // Reset navigation index when returning to dashboard
+    _navigationController.resetIndex();
   }
 
   Future<void> _loadData() async {
@@ -73,6 +79,12 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
         actions: [
           IconButton(icon: const Icon(Icons.refresh), onPressed: _loadData),
         ],
+      ),
+      bottomNavigationBar: Obx(
+        () => DoctorBottomNavBar(
+          currentIndex: _navigationController.currentIndex,
+          onTap: _navigationController.changePage,
+        ),
       ),
       body: RefreshIndicator(
         onRefresh: _loadData,

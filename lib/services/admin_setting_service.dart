@@ -15,7 +15,7 @@ class AdminSettingService extends GetxService {
 
   // Cache for settings to reduce database calls
   final Map<String, AdminSettingModel> _settingsCache = {};
-  
+
   // Default settings
   final Map<String, dynamic> _defaultSettings = {
     SettingKey.appName: 'AI Diagnosist',
@@ -34,7 +34,8 @@ class AdminSettingService extends GetxService {
     SettingKey.secondaryColor: '#FF9800',
     SettingKey.darkModeEnabled: false,
     SettingKey.maintenanceMode: false,
-    SettingKey.maintenanceMessage: 'System is under maintenance. Please try again later.',
+    SettingKey.maintenanceMessage:
+        'System is under maintenance. Please try again later.',
     SettingKey.systemVersion: '1.0.0',
     SettingKey.allowRegistration: true,
     SettingKey.allowDoctorRegistration: true,
@@ -69,7 +70,7 @@ class AdminSettingService extends GetxService {
         try {
           final model = AdminSettingModel.fromJson(setting);
           settings.add(model);
-          
+
           // Update cache
           _settingsCache[model.key] = model;
         } catch (e) {
@@ -107,7 +108,7 @@ class AdminSettingService extends GetxService {
         try {
           final model = AdminSettingModel.fromJson(setting);
           settings.add(model);
-          
+
           // Update cache
           _settingsCache[model.key] = model;
         } catch (e) {
@@ -131,21 +132,22 @@ class AdminSettingService extends GetxService {
       }
 
       // Get setting from database
-      final response = await _supabase
-          .from('admin_settings')
-          .select()
-          .eq('setting_key', key)
-          .maybeSingle();
+      final response =
+          await _supabase
+              .from('admin_settings')
+              .select()
+              .eq('setting_key', key)
+              .maybeSingle();
 
       if (response != null) {
         final model = AdminSettingModel.fromJson(response);
-        
+
         // Update cache
         _settingsCache[key] = model;
-        
+
         return model;
       }
-      
+
       return null;
     } catch (e) {
       debugPrint('Error getting setting: $e');
@@ -166,21 +168,21 @@ class AdminSettingService extends GetxService {
       if (setting != null) {
         return setting.value;
       }
-      
+
       // Return default value if available
       if (_defaultSettings.containsKey(key)) {
         return _defaultSettings[key];
       }
-      
+
       return null;
     } catch (e) {
       debugPrint('Error getting setting value: $e');
-      
+
       // Return default value if available
       if (_defaultSettings.containsKey(key)) {
         return _defaultSettings[key];
       }
-      
+
       return null;
     }
   }
@@ -209,54 +211,57 @@ class AdminSettingService extends GetxService {
       }
 
       // Check if setting already exists
-      final existingSetting = await _supabase
-          .from('admin_settings')
-          .select()
-          .eq('setting_key', key)
-          .maybeSingle();
+      final existingSetting =
+          await _supabase
+              .from('admin_settings')
+              .select()
+              .eq('setting_key', key)
+              .maybeSingle();
 
       if (existingSetting != null) {
         // Update existing setting
-        final response = await _supabase
-            .from('admin_settings')
-            .update({
-              'setting_value': value,
-              'description': description,
-              'category': category,
-              'is_public': isPublic,
-              'updated_by': currentUser.id,
-            })
-            .eq('setting_key', key)
-            .select()
-            .single();
+        final response =
+            await _supabase
+                .from('admin_settings')
+                .update({
+                  'setting_value': value,
+                  'description': description,
+                  'category': category,
+                  'is_public': isPublic,
+                  'updated_by': currentUser.id,
+                })
+                .eq('setting_key', key)
+                .select()
+                .single();
 
         final model = AdminSettingModel.fromJson(response);
-        
+
         // Update cache
         _settingsCache[key] = model;
-        
+
         return model;
       } else {
         // Create new setting
-        final response = await _supabase
-            .from('admin_settings')
-            .insert({
-              'setting_key': key,
-              'setting_value': value,
-              'description': description,
-              'category': category,
-              'is_public': isPublic,
-              'created_by': currentUser.id,
-              'updated_by': currentUser.id,
-            })
-            .select()
-            .single();
+        final response =
+            await _supabase
+                .from('admin_settings')
+                .insert({
+                  'setting_key': key,
+                  'setting_value': value,
+                  'description': description,
+                  'category': category,
+                  'is_public': isPublic,
+                  'created_by': currentUser.id,
+                  'updated_by': currentUser.id,
+                })
+                .select()
+                .single();
 
         final model = AdminSettingModel.fromJson(response);
-        
+
         // Update cache
         _settingsCache[key] = model;
-        
+
         return model;
       }
     } catch (e) {
@@ -277,10 +282,10 @@ class AdminSettingService extends GetxService {
 
       // Delete setting
       await _supabase.from('admin_settings').delete().eq('setting_key', key);
-      
+
       // Remove from cache
       _settingsCache.remove(key);
-      
+
       return true;
     } catch (e) {
       debugPrint('Error deleting setting: $e');
@@ -292,7 +297,72 @@ class AdminSettingService extends GetxService {
   void clearCache() {
     _settingsCache.clear();
   }
-  
+
+  // Check if admin_settings table exists
+  Future<bool> doesAdminSettingsTableExist() async {
+    try {
+      // Try to query the table
+      await _supabase.from('admin_settings').select('id').limit(1);
+      return true;
+    } catch (e) {
+      // Check if the error is about the table not existing
+      if (e.toString().contains(
+            'relation "public.admin_settings" does not exist',
+          ) ||
+          e.toString().contains('code: 42P01')) {
+        return false;
+      }
+      // For other errors, assume the table exists but there's another issue
+      return true;
+    }
+  }
+
+  // Create admin_settings table
+  Future<bool> createAdminSettingsTable() async {
+    try {
+      // First check if current user is admin
+      final isAdmin = await _adminService.isCurrentUserAdmin();
+      if (!isAdmin) {
+        debugPrint('Only admins can create admin_settings table');
+        return false;
+      }
+
+      // Try direct table creation first
+      try {
+        debugPrint('Attempting to create admin_settings table directly...');
+
+        // Create a simple table with minimal fields
+        await _supabase.from('admin_settings').insert({
+          'setting_key': 'app_name',
+          'setting_value': 'AI Diagnosist',
+          'category': 'general',
+          'is_public': true,
+          'created_by': _supabaseService.getCurrentAuthUser()?.id,
+          'updated_by': _supabaseService.getCurrentAuthUser()?.id,
+        }).select();
+
+        debugPrint(
+          'admin_settings table created successfully via direct insert',
+        );
+        return true;
+      } catch (directError) {
+        debugPrint('Direct table creation failed: $directError');
+
+        // Show instructions for manual table creation
+        debugPrint(
+          'Please create the admin_settings table manually in the Supabase dashboard',
+        );
+        debugPrint(
+          'Use the SQL script in the sql/admin_settings_table.sql file',
+        );
+        return false;
+      }
+    } catch (e) {
+      debugPrint('Error creating admin_settings table: $e');
+      return false;
+    }
+  }
+
   // Initialize default settings if they don't exist
   Future<void> initializeDefaultSettings() async {
     try {
@@ -302,39 +372,57 @@ class AdminSettingService extends GetxService {
         debugPrint('Only admins can initialize default settings');
         return;
       }
-      
+
       // Get current user ID
       final currentUser = _supabaseService.getCurrentAuthUser();
       if (currentUser == null) {
         debugPrint('No authenticated user found');
         return;
       }
-      
+
+      // Check if the table exists, create it if it doesn't
+      final tableExists = await doesAdminSettingsTableExist();
+      if (!tableExists) {
+        debugPrint('admin_settings table does not exist, creating it...');
+        final created = await createAdminSettingsTable();
+        if (!created) {
+          debugPrint('Failed to create admin_settings table');
+          return;
+        }
+      }
+
       // Get all existing settings
       final existingSettings = await getAllSettings();
       final existingKeys = existingSettings.map((s) => s.key).toSet();
-      
+
       // Create default settings that don't exist
       for (var entry in _defaultSettings.entries) {
         if (!existingKeys.contains(entry.key)) {
           // Determine category based on key
           String category = SettingCategory.general;
-          if (entry.key.startsWith('password') || entry.key.startsWith('session')) {
+          if (entry.key.startsWith('password') ||
+              entry.key.startsWith('session')) {
             category = SettingCategory.security;
-          } else if (entry.key.endsWith('Notifications') || entry.key.contains('notification')) {
+          } else if (entry.key.endsWith('Notifications') ||
+              entry.key.contains('notification')) {
             category = SettingCategory.notification;
-          } else if (entry.key.contains('Color') || entry.key.contains('Mode')) {
+          } else if (entry.key.contains('Color') ||
+              entry.key.contains('Mode')) {
             category = SettingCategory.appearance;
-          } else if (entry.key.startsWith('maintenance') || entry.key.startsWith('system') || entry.key.startsWith('allow')) {
+          } else if (entry.key.startsWith('maintenance') ||
+              entry.key.startsWith('system') ||
+              entry.key.startsWith('allow')) {
             category = SettingCategory.system;
-          } else if (entry.key.contains('currency') || entry.key.contains('payment') || entry.key.contains('tax')) {
+          } else if (entry.key.contains('currency') ||
+              entry.key.contains('payment') ||
+              entry.key.contains('tax')) {
             category = SettingCategory.payment;
           } else if (entry.key.endsWith('ApiKey')) {
             category = SettingCategory.integration;
           } else if (entry.key.startsWith('ai')) {
             category = SettingCategory.ai;
           }
-          
+
           // Create setting
           await saveSetting(
             key: entry.key,

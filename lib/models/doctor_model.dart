@@ -135,6 +135,19 @@ class DoctorModel {
     return rating.toStringAsFixed(1);
   }
 
+  // Get formatted verification status
+  String get formattedVerificationStatus {
+    switch (verificationStatus.toLowerCase()) {
+      case 'approved':
+        return 'Verified';
+      case 'rejected':
+        return 'Rejected';
+      case 'pending':
+      default:
+        return 'Pending Verification';
+    }
+  }
+
   // Create a copy of the model with updated fields
   DoctorModel copyWith({
     String? id,

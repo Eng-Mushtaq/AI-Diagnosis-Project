@@ -258,71 +258,67 @@ class _AdminMessagesScreenState extends State<AdminMessagesScreen>
 
   // Show reply dialog
   void _showReplyDialog(AdminMessageModel message) {
-    // Create controller
-    final replyController = TextEditingController();
-    bool isDialogActive = true;
-
-    // Create a function to safely dispose controller
-    void disposeController() {
-      if (isDialogActive) {
-        replyController.dispose();
-        isDialogActive = false;
-      }
-    }
+    // Use a key to track the dialog state
+    final dialogKey = GlobalKey<State>();
 
     Get.dialog(
-      AlertDialog(
-        title: Text('Reply to ${message.senderName ?? "User"}'),
-        content: TextField(
-          controller: replyController,
-          decoration: const InputDecoration(
-            hintText: 'Type your reply here...',
-            border: OutlineInputBorder(),
-          ),
-          maxLines: 5,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Get.back();
-            },
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              if (replyController.text.isNotEmpty) {
-                // Store value before closing dialog
-                final replyText = replyController.text;
+      StatefulBuilder(
+        key: dialogKey,
+        builder: (context, setState) {
+          // Create controller inside the builder to ensure proper lifecycle
+          final replyController = TextEditingController();
 
-                // Close dialog
-                Get.back();
+          return AlertDialog(
+            title: Text('Reply to ${message.senderName ?? "User"}'),
+            content: TextField(
+              controller: replyController,
+              decoration: const InputDecoration(
+                hintText: 'Type your reply here...',
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 5,
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Get.back();
+                },
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () {
+                  if (replyController.text.isNotEmpty) {
+                    // Store value before closing dialog
+                    final replyText = replyController.text;
 
-                // Create a new support message
-                _messageController.createAdminMessage(
-                  title: 'Re: ${message.title}',
-                  content: replyText,
-                  recipientId: message.senderId,
-                  type: AdminMessageType.support,
-                );
+                    // Close dialog first to prevent controller issues
+                    Get.back();
 
-                Get.snackbar(
-                  'Success',
-                  'Reply sent to ${message.senderName ?? "User"}',
-                  snackPosition: SnackPosition.BOTTOM,
-                  backgroundColor: Colors.green,
-                  colorText: Colors.white,
-                );
-              }
-            },
-            child: const Text('Send'),
-          ),
-        ],
+                    // Create a new support message
+                    _messageController.createAdminMessage(
+                      title: 'Re: ${message.title}',
+                      content: replyText,
+                      recipientId: message.senderId,
+                      type: AdminMessageType.support,
+                    );
+
+                    Get.snackbar(
+                      'Success',
+                      'Reply sent to ${message.senderName ?? "User"}',
+                      snackPosition: SnackPosition.BOTTOM,
+                      backgroundColor: Colors.green,
+                      colorText: Colors.white,
+                    );
+                  }
+                },
+                child: const Text('Send'),
+              ),
+            ],
+          );
+        },
       ),
       barrierDismissible: false, // Prevent dismissing by tapping outside
-    ).then((_) {
-      // Ensure controller is disposed when dialog is closed
-      disposeController();
-    });
+    );
   }
 
   // Build detail row
@@ -350,25 +346,19 @@ class _AdminMessagesScreenState extends State<AdminMessagesScreen>
 
   // Show create message dialog
   void _showCreateMessageDialog() {
-    // Create controllers
-    final titleController = TextEditingController();
-    final contentController = TextEditingController();
-    AdminMessageType selectedType = AdminMessageType.announcement;
-    bool isDialogActive = true;
+    // Use a key to track the dialog state
+    final dialogKey = GlobalKey<State>();
 
-    // Create a function to safely dispose controllers
-    void disposeControllers() {
-      if (isDialogActive) {
-        titleController.dispose();
-        contentController.dispose();
-        isDialogActive = false;
-      }
-    }
-
-    // Show the dialog
+    // Create controllers inside a StatefulBuilder to ensure proper lifecycle management
     Get.dialog(
       StatefulBuilder(
+        key: dialogKey,
         builder: (context, setState) {
+          // Create controllers inside the builder to ensure they're tied to this widget's lifecycle
+          final titleController = TextEditingController();
+          final contentController = TextEditingController();
+          AdminMessageType selectedType = AdminMessageType.announcement;
+
           return AlertDialog(
             title: const Text('Create New Message'),
             content: SingleChildScrollView(
@@ -434,7 +424,7 @@ class _AdminMessagesScreenState extends State<AdminMessagesScreen>
                     final content = contentController.text;
                     final type = selectedType;
 
-                    // Close dialog
+                    // Close dialog first to prevent controller issues
                     Get.back();
 
                     // Create new message using the controller
@@ -485,10 +475,7 @@ class _AdminMessagesScreenState extends State<AdminMessagesScreen>
         },
       ),
       barrierDismissible: false, // Prevent dismissing by tapping outside
-    ).then((_) {
-      // Ensure controllers are disposed when dialog is closed
-      disposeControllers();
-    });
+    );
   }
 
   // Show database setup dialog

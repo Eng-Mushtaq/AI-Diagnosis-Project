@@ -24,82 +24,106 @@ class AdminMessageService extends GetxService {
         return [];
       }
 
-      // Get all admin messages without trying to join with users table
-      final response = await _supabase
-          .from('admin_messages')
-          .select()
-          .order('created_at', ascending: false);
+      try {
+        // Get all admin messages without trying to join with users table
+        final response = await _supabase
+            .from('admin_messages')
+            .select()
+            .order('created_at', ascending: false);
 
-      debugPrint('Retrieved ${response.length} admin messages');
+        debugPrint('Retrieved ${response.length} admin messages');
 
-      // Parse the response into AdminMessageModel objects
-      List<AdminMessageModel> messages = [];
-      for (var message in response) {
-        try {
-          // Get sender details in a separate query
-          String? senderName;
-          String? senderProfileImage;
-          String? recipientName;
-
+        // Parse the response into AdminMessageModel objects
+        List<AdminMessageModel> messages = [];
+        for (var message in response) {
           try {
-            if (message['sender_id'] != null) {
-              final senderData =
-                  await _supabase
-                      .from('users')
-                      .select('name, profile_image')
-                      .eq('id', message['sender_id'])
-                      .maybeSingle();
+            // Get sender details in a separate query
+            String? senderName;
+            String? senderProfileImage;
+            String? recipientName;
 
-              if (senderData != null) {
-                senderName = senderData['name'];
-                senderProfileImage = senderData['profile_image'];
+            try {
+              if (message['sender_id'] != null) {
+                final senderData =
+                    await _supabase
+                        .from('users')
+                        .select('name, profile_image')
+                        .eq('id', message['sender_id'])
+                        .maybeSingle();
+
+                if (senderData != null) {
+                  senderName = senderData['name'];
+                  senderProfileImage = senderData['profile_image'];
+                }
               }
+
+              if (message['recipient_id'] != null) {
+                final recipientData =
+                    await _supabase
+                        .from('users')
+                        .select('name')
+                        .eq('id', message['recipient_id'])
+                        .maybeSingle();
+
+                if (recipientData != null) {
+                  recipientName = recipientData['name'];
+                }
+              }
+            } catch (userError) {
+              debugPrint('Error fetching user details: $userError');
+              // Continue with null values for user details
             }
 
-            if (message['recipient_id'] != null) {
-              final recipientData =
-                  await _supabase
-                      .from('users')
-                      .select('name')
-                      .eq('id', message['recipient_id'])
-                      .maybeSingle();
+            // Handle missing fields with defaults
+            final String title =
+                message['title'] ?? message['subject'] ?? 'No Title';
 
-              if (recipientData != null) {
-                recipientName = recipientData['name'];
-              }
-            }
-          } catch (userError) {
-            debugPrint('Error fetching user details: $userError');
-            // Continue with null values for user details
+            messages.add(
+              AdminMessageModel(
+                id: message['id'],
+                title: title,
+                content: message['content'],
+                senderId: message['sender_id'],
+                senderName: senderName ?? 'Unknown',
+                senderProfileImage: senderProfileImage,
+                recipientId: message['recipient_id'],
+                recipientName: recipientName,
+                type: AdminMessageModel.typeFromString(
+                  message['message_type'] ?? message['type'] ?? 'announcement',
+                ),
+                status: AdminMessageModel.statusFromString(
+                  message['status'] ?? 'active',
+                ),
+                isRead: message['is_read'] ?? false,
+                readAt:
+                    message['read_at'] != null
+                        ? DateTime.parse(message['read_at'])
+                        : null,
+                createdAt: DateTime.parse(message['created_at']),
+                updatedAt:
+                    message['updated_at'] != null
+                        ? DateTime.parse(message['updated_at'])
+                        : DateTime.parse(message['created_at']),
+              ),
+            );
+          } catch (e) {
+            debugPrint('Error parsing admin message: $e');
           }
-
-          messages.add(
-            AdminMessageModel(
-              id: message['id'],
-              title: message['title'],
-              content: message['content'],
-              senderId: message['sender_id'],
-              senderName: senderName ?? 'Unknown',
-              senderProfileImage: senderProfileImage,
-              recipientId: message['recipient_id'],
-              recipientName: recipientName,
-              type: AdminMessageModel.typeFromString(message['type']),
-              status: AdminMessageModel.statusFromString(message['status']),
-              isRead: message['is_read'] ?? false,
-              readAt:
-                  message['read_at'] != null
-                      ? DateTime.parse(message['read_at'])
-                      : null,
-              createdAt: DateTime.parse(message['created_at']),
-              updatedAt: DateTime.parse(message['updated_at']),
-            ),
-          );
-        } catch (e) {
-          debugPrint('Error parsing admin message: $e');
         }
-      }
 
-      return messages;
+        return messages;
+      } catch (e) {
+        if (e is PostgrestException && e.code == '42P01') {
+          // Table doesn't exist yet
+          debugPrint(
+            'Admin messages table does not exist or has different structure. Creating mock data...',
+          );
+
+          // Return empty list for now
+          return [];
+        }
+        rethrow;
+      }
     } catch (e) {
       debugPrint('Error getting all admin messages: $e');
       return [];
@@ -118,88 +142,134 @@ class AdminMessageService extends GetxService {
         return [];
       }
 
-      // Get admin messages by type without trying to join with users table
-      final response = await _supabase
-          .from('admin_messages')
-          .select()
-          .eq('type', AdminMessageModel.typeToString(type))
-          .order('created_at', ascending: false);
+      try {
+        // Determine which field to use for type filtering
+        final typeField = await _determineTypeField();
+        final typeValue = AdminMessageModel.typeToString(type);
 
-      debugPrint(
-        'Retrieved ${response.length} admin messages of type: ${AdminMessageModel.typeToString(type)}',
-      );
+        // Get admin messages by type without trying to join with users table
+        final response = await _supabase
+            .from('admin_messages')
+            .select()
+            .eq(typeField, typeValue)
+            .order('created_at', ascending: false);
 
-      // Parse the response into AdminMessageModel objects
-      List<AdminMessageModel> messages = [];
-      for (var message in response) {
-        try {
-          // Get sender details in a separate query
-          String? senderName;
-          String? senderProfileImage;
-          String? recipientName;
+        debugPrint(
+          'Retrieved ${response.length} admin messages of type: $typeValue',
+        );
 
+        // Parse the response into AdminMessageModel objects
+        List<AdminMessageModel> messages = [];
+        for (var message in response) {
           try {
-            if (message['sender_id'] != null) {
-              final senderData =
-                  await _supabase
-                      .from('users')
-                      .select('name, profile_image')
-                      .eq('id', message['sender_id'])
-                      .maybeSingle();
+            // Get sender details in a separate query
+            String? senderName;
+            String? senderProfileImage;
+            String? recipientName;
 
-              if (senderData != null) {
-                senderName = senderData['name'];
-                senderProfileImage = senderData['profile_image'];
+            try {
+              if (message['sender_id'] != null) {
+                final senderData =
+                    await _supabase
+                        .from('users')
+                        .select('name, profile_image')
+                        .eq('id', message['sender_id'])
+                        .maybeSingle();
+
+                if (senderData != null) {
+                  senderName = senderData['name'];
+                  senderProfileImage = senderData['profile_image'];
+                }
               }
+
+              if (message['recipient_id'] != null) {
+                final recipientData =
+                    await _supabase
+                        .from('users')
+                        .select('name')
+                        .eq('id', message['recipient_id'])
+                        .maybeSingle();
+
+                if (recipientData != null) {
+                  recipientName = recipientData['name'];
+                }
+              }
+            } catch (userError) {
+              debugPrint('Error fetching user details: $userError');
+              // Continue with null values for user details
             }
 
-            if (message['recipient_id'] != null) {
-              final recipientData =
-                  await _supabase
-                      .from('users')
-                      .select('name')
-                      .eq('id', message['recipient_id'])
-                      .maybeSingle();
+            // Handle missing fields with defaults
+            final String title =
+                message['title'] ?? message['subject'] ?? 'No Title';
 
-              if (recipientData != null) {
-                recipientName = recipientData['name'];
-              }
-            }
-          } catch (userError) {
-            debugPrint('Error fetching user details: $userError');
-            // Continue with null values for user details
+            messages.add(
+              AdminMessageModel(
+                id: message['id'],
+                title: title,
+                content: message['content'],
+                senderId: message['sender_id'],
+                senderName: senderName ?? 'Unknown',
+                senderProfileImage: senderProfileImage,
+                recipientId: message['recipient_id'],
+                recipientName: recipientName,
+                type: AdminMessageModel.typeFromString(
+                  message['message_type'] ?? message['type'] ?? 'announcement',
+                ),
+                status: AdminMessageModel.statusFromString(
+                  message['status'] ?? 'active',
+                ),
+                isRead: message['is_read'] ?? false,
+                readAt:
+                    message['read_at'] != null
+                        ? DateTime.parse(message['read_at'])
+                        : null,
+                createdAt: DateTime.parse(message['created_at']),
+                updatedAt:
+                    message['updated_at'] != null
+                        ? DateTime.parse(message['updated_at'])
+                        : DateTime.parse(message['created_at']),
+              ),
+            );
+          } catch (e) {
+            debugPrint('Error parsing admin message: $e');
           }
-
-          messages.add(
-            AdminMessageModel(
-              id: message['id'],
-              title: message['title'],
-              content: message['content'],
-              senderId: message['sender_id'],
-              senderName: senderName ?? 'Unknown',
-              senderProfileImage: senderProfileImage,
-              recipientId: message['recipient_id'],
-              recipientName: recipientName,
-              type: AdminMessageModel.typeFromString(message['type']),
-              status: AdminMessageModel.statusFromString(message['status']),
-              isRead: message['is_read'] ?? false,
-              readAt:
-                  message['read_at'] != null
-                      ? DateTime.parse(message['read_at'])
-                      : null,
-              createdAt: DateTime.parse(message['created_at']),
-              updatedAt: DateTime.parse(message['updated_at']),
-            ),
-          );
-        } catch (e) {
-          debugPrint('Error parsing admin message: $e');
         }
-      }
 
-      return messages;
+        return messages;
+      } catch (e) {
+        if (e is PostgrestException && e.code == '42P01') {
+          // Table doesn't exist yet
+          debugPrint(
+            'Admin messages table does not exist or has different structure. Creating mock data...',
+          );
+
+          // Return empty list for now
+          return [];
+        }
+        rethrow;
+      }
     } catch (e) {
       debugPrint('Error getting admin messages by type: $e');
       return [];
+    }
+  }
+
+  // Helper method to determine which field to use for type filtering
+  Future<String> _determineTypeField() async {
+    try {
+      // Try to query with 'type' field first
+      await _supabase.from('admin_messages').select('type').limit(1);
+      return 'type';
+    } catch (e) {
+      try {
+        // Try with 'message_type' field
+        await _supabase.from('admin_messages').select('message_type').limit(1);
+        return 'message_type';
+      } catch (e) {
+        // Default to message_type as per SQL schema
+        return 'message_type';
+      }
     }
   }
 
@@ -226,27 +296,132 @@ class AdminMessageService extends GetxService {
         return null;
       }
 
-      // Prepare data for insertion
-      final Map<String, dynamic> data = {
-        'title': title,
-        'content': content,
-        'sender_id': currentUser.id,
-        'recipient_id': recipientId,
-        'type': AdminMessageModel.typeToString(type),
-        'status': AdminMessageModel.statusToString(status),
-        'is_read': false,
-      };
+      // Determine which fields to use based on table structure
+      Map<String, dynamic> data = {};
 
-      // Check if admin_messages table exists
       try {
-        // First, try to check if the table exists by querying it
-        await _supabase.from('admin_messages').select('id').limit(1);
+        // Check if admin_messages table exists and determine its structure
+        final tableInfo = await _supabase
+            .from('admin_messages')
+            .select('id')
+            .limit(1);
+        debugPrint(
+          'admin_messages table exists with structure: ${tableInfo.toString()}',
+        );
+
+        // Try to determine if we should use 'title' or 'subject'
+        bool useTitle = true;
+        try {
+          await _supabase.from('admin_messages').select('title').limit(1);
+        } catch (e) {
+          useTitle = false;
+        }
+
+        // Try to determine if we should use 'type' or 'message_type'
+        bool useType = true;
+        try {
+          await _supabase.from('admin_messages').select('type').limit(1);
+        } catch (e) {
+          useType = false;
+        }
+
+        // Prepare data for insertion based on table structure
+        data = {
+          useTitle ? 'title' : 'subject': title,
+          'content': content,
+          'sender_id': currentUser.id,
+          'recipient_id': recipientId,
+          useType ? 'type' : 'message_type': AdminMessageModel.typeToString(
+            type,
+          ),
+          'status': AdminMessageModel.statusToString(status),
+          'is_read': false,
+        };
       } catch (tableError) {
-        // If we get a 404 error, the table doesn't exist
-        debugPrint('admin_messages table not found: $tableError');
+        // If we get an error, the table might not exist or have a different structure
+        debugPrint('admin_messages table error: $tableError');
+
+        // Use the SQL schema structure we created
+        data = {
+          'subject': title,
+          'content': content,
+          'sender_id': currentUser.id,
+          'recipient_id': recipientId,
+          'message_type': AdminMessageModel.typeToString(type),
+          'is_read': false,
+        };
+      }
+
+      try {
+        // Insert message and get the result
+        final response =
+            await _supabase
+                .from('admin_messages')
+                .insert(data)
+                .select()
+                .single();
+
+        debugPrint('Successfully inserted admin message: ${response['id']}');
+
+        // Get sender details
+        final senderData =
+            await _supabase
+                .from('users')
+                .select('name, profile_image')
+                .eq('id', currentUser.id)
+                .single();
+
+        // Get recipient details if applicable
+        Map<String, dynamic>? recipientData;
+        if (recipientId != null) {
+          try {
+            recipientData =
+                await _supabase
+                    .from('users')
+                    .select('name')
+                    .eq('id', recipientId)
+                    .single();
+          } catch (e) {
+            debugPrint('Error getting recipient details: $e');
+            // Continue without recipient details
+          }
+        }
+
+        // Handle missing fields with defaults
+        final String messageTitle =
+            response['title'] ?? response['subject'] ?? title;
+
+        // Create and return the message model
+        return AdminMessageModel(
+          id: response['id'],
+          title: messageTitle,
+          content: response['content'],
+          senderId: response['sender_id'],
+          senderName: senderData['name'],
+          senderProfileImage: senderData['profile_image'],
+          recipientId: response['recipient_id'],
+          recipientName: recipientData?['name'],
+          type: AdminMessageModel.typeFromString(
+            response['message_type'] ?? response['type'] ?? 'announcement',
+          ),
+          status: AdminMessageModel.statusFromString(
+            response['status'] ?? 'active',
+          ),
+          isRead: response['is_read'] ?? false,
+          readAt:
+              response['read_at'] != null
+                  ? DateTime.parse(response['read_at'])
+                  : null,
+          createdAt: DateTime.parse(response['created_at']),
+          updatedAt:
+              response['updated_at'] != null
+                  ? DateTime.parse(response['updated_at'])
+                  : DateTime.parse(response['created_at']),
+        );
+      } catch (insertError) {
+        debugPrint('Error inserting admin message: $insertError');
 
         // Create a mock message for development purposes
-        // In a production environment, you would want to create the table instead
         final now = DateTime.now();
         return AdminMessageModel(
           id: 'mock-${now.millisecondsSinceEpoch}',
@@ -265,60 +440,11 @@ class AdminMessageService extends GetxService {
           updatedAt: now,
         );
       }
-
-      // Insert message and get the result
-      final response =
-          await _supabase.from('admin_messages').insert(data).select().single();
-
-      debugPrint('Successfully inserted admin message: ${response['id']}');
-
-      // Get sender details
-      final senderData =
-          await _supabase
-              .from('users')
-              .select('name, profile_image')
-              .eq('id', currentUser.id)
-              .single();
-
-      // Get recipient details if applicable
-      Map<String, dynamic>? recipientData;
-      if (recipientId != null) {
-        try {
-          recipientData =
-              await _supabase
-                  .from('users')
-                  .select('name')
-                  .eq('id', recipientId)
-                  .single();
-        } catch (e) {
-          debugPrint('Error getting recipient details: $e');
-          // Continue without recipient details
-        }
-      }
-
-      // Create and return the message model
-      return AdminMessageModel(
-        id: response['id'],
-        title: response['title'],
-        content: response['content'],
-        senderId: response['sender_id'],
-        senderName: senderData['name'],
-        senderProfileImage: senderData['profile_image'],
-        recipientId: response['recipient_id'],
-        recipientName: recipientData?['name'],
-        type: AdminMessageModel.typeFromString(response['type']),
-        status: AdminMessageModel.statusFromString(response['status']),
-        isRead: response['is_read'] ?? false,
-        readAt:
-            response['read_at'] != null
-                ? DateTime.parse(response['read_at'])
-                : null,
-        createdAt: DateTime.parse(response['created_at']),
-        updatedAt: DateTime.parse(response['updated_at']),
-      );
     } catch (e) {
       debugPrint('Error creating admin message: $e');
-      rethrow; // Rethrow to allow the controller to handle the error
+
+      // Return null instead of rethrowing to prevent app crashes
+      return null;
     }
   }
 

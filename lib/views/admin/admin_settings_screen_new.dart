@@ -17,7 +17,8 @@ class AdminSettingsScreen extends StatefulWidget {
 
 class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
   final AuthController _authController = Get.find<AuthController>();
-  final AdminSettingController _settingController = Get.find<AdminSettingController>();
+  final AdminSettingController _settingController =
+      Get.find<AdminSettingController>();
   final AdminNavigationController _navigationController =
       Get.find<AdminNavigationController>();
 
@@ -38,10 +39,7 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
       appBar: AppBar(
         title: const Text('Admin Settings'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadSettings,
-          ),
+          IconButton(icon: const Icon(Icons.refresh), onPressed: _loadSettings),
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () async {
@@ -67,9 +65,11 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
 
               // Settings by category
               ...SettingCategory.all.map((category) {
-                final settings = _settingController.getSettingsForCategory(category);
+                final settings = _settingController.getSettingsForCategory(
+                  category,
+                );
                 if (settings.isEmpty) return const SizedBox.shrink();
-                
+
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -83,19 +83,21 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
               // Initialize default settings button
               Center(
                 child: ElevatedButton.icon(
-                  onPressed: _settingController.isInitializingDefaults
-                      ? null
-                      : () => _initializeDefaultSettings(),
-                  icon: _settingController.isInitializingDefaults
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Icon(Icons.settings_backup_restore),
+                  onPressed:
+                      _settingController.isInitializingDefaults
+                          ? null
+                          : () => _initializeDefaultSettings(),
+                  icon:
+                      _settingController.isInitializingDefaults
+                          ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                          : const Icon(Icons.settings_backup_restore),
                   label: const Text('Initialize Default Settings'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primaryColor,
@@ -114,8 +116,8 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
       }),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _showAddSettingDialog(),
-        child: const Icon(Icons.add),
         backgroundColor: AppColors.primaryColor,
+        child: const Icon(Icons.add),
       ),
       bottomNavigationBar: Obx(
         () => AdminBottomNavBar(
@@ -232,7 +234,7 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
   // Build setting tile
   Widget _buildSettingTile(AdminSettingModel setting) {
     Widget? trailing;
-    
+
     // Determine the type of setting value and create appropriate widget
     if (setting.value is bool) {
       trailing = Switch(
@@ -264,9 +266,8 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
         ],
       ),
       trailing: trailing,
-      onTap: setting.value is bool
-          ? null
-          : () => _showEditSettingDialog(setting),
+      onTap:
+          setting.value is bool ? null : () => _showEditSettingDialog(setting),
     );
   }
 
@@ -284,7 +285,10 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
   }
 
   // Update setting
-  Future<void> _updateSetting(AdminSettingModel setting, dynamic newValue) async {
+  Future<void> _updateSetting(
+    AdminSettingModel setting,
+    dynamic newValue,
+  ) async {
     final success = await _settingController.saveSetting(
       key: setting.key,
       value: newValue,
@@ -480,12 +484,13 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
                       labelText: 'Category',
                       border: OutlineInputBorder(),
                     ),
-                    items: SettingCategory.all.map((category) {
-                      return DropdownMenuItem<String>(
-                        value: category,
-                        child: Text(_formatCategoryName(category)),
-                      );
-                    }).toList(),
+                    items:
+                        SettingCategory.all.map((category) {
+                          return DropdownMenuItem<String>(
+                            value: category,
+                            child: Text(_formatCategoryName(category)),
+                          );
+                        }).toList(),
                     onChanged: (value) {
                       if (value != null) {
                         setState(() {
@@ -517,7 +522,8 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
               ),
               TextButton(
                 onPressed: () async {
-                  if (keyController.text.isEmpty || valueController.text.isEmpty) {
+                  if (keyController.text.isEmpty ||
+                      valueController.text.isEmpty) {
                     Get.snackbar(
                       'Error',
                       'Key and value cannot be empty',
@@ -571,14 +577,48 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
 
   // Initialize default settings
   Future<void> _initializeDefaultSettings() async {
-    await _settingController.initializeDefaultSettings();
-    
-    Get.snackbar(
-      'Success',
-      'Default settings initialized successfully',
-      snackPosition: SnackPosition.BOTTOM,
-      backgroundColor: Colors.green,
-      colorText: Colors.white,
+    // Show loading dialog
+    Get.dialog(
+      const AlertDialog(
+        title: Text('Initializing Settings'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text(
+              'Creating database tables and initializing default settings...',
+            ),
+          ],
+        ),
+      ),
+      barrierDismissible: false,
     );
+
+    try {
+      await _settingController.initializeDefaultSettings();
+
+      // Close loading dialog
+      Get.back();
+
+      Get.snackbar(
+        'Success',
+        'Default settings initialized successfully',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.green,
+        colorText: Colors.white,
+      );
+    } catch (e) {
+      // Close loading dialog
+      Get.back();
+
+      Get.snackbar(
+        'Error',
+        'Failed to initialize settings: ${_settingController.errorMessage}',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    }
   }
 }

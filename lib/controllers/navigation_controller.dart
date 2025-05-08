@@ -59,7 +59,7 @@ class DoctorNavigationController extends NavigationController {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       switch (index) {
         case 0: // Dashboard
-          Get.offAllNamed(AppRoutes.doctorDashboard);
+          Get.offAllNamed(AppRoutes.doctorHome);
           break;
         case 1: // Appointments
           Get.toNamed(AppRoutes.appointments);

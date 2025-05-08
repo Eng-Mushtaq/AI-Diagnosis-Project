@@ -5,6 +5,7 @@ import '../../controllers/doctor_controller.dart';
 import '../../models/doctor_model.dart';
 import '../../routes/app_routes.dart';
 import '../../widgets/doctor_card.dart';
+import '../../services/supabase_service.dart';
 
 // Doctors screen to display list of available doctors
 class DoctorsScreen extends StatefulWidget {
@@ -41,7 +42,358 @@ class _DoctorsScreenState extends State<DoctorsScreen> {
 
   // Load all doctors
   Future<void> _loadDoctors() async {
-    await _doctorController.getAllDoctors();
+    try {
+      await _doctorController.getAllDoctors();
+
+      // If no doctors were found, show a message
+      if (_doctorController.doctors.isEmpty) {
+        // Check if there's a specific error message from the controller
+        if (_doctorController.errorMessage.isNotEmpty) {
+          // If there's a data integrity issue, show a more detailed message
+          if (_doctorController.errorMessage.contains('Data integrity issue')) {
+            Get.snackbar(
+              'Database Issue Detected',
+              'There appears to be a data integrity issue. Please use the "Fetch All Doctors" button to see all available doctors.',
+              snackPosition: SnackPosition.BOTTOM,
+              backgroundColor: Colors.orange,
+              colorText: Colors.white,
+              duration: const Duration(seconds: 5),
+            );
+          } else {
+            // Show the specific error message from the controller
+            Get.snackbar(
+              'No Doctors Found',
+              _doctorController.errorMessage,
+              snackPosition: SnackPosition.BOTTOM,
+              backgroundColor: Colors.orange,
+              colorText: Colors.white,
+              duration: const Duration(seconds: 5),
+            );
+          }
+        } else {
+          // Default message if no specific error is available
+          Get.snackbar(
+            'No Doctors Found',
+            'No approved doctors are currently available in the system.',
+            snackPosition: SnackPosition.BOTTOM,
+            backgroundColor: Colors.orange,
+            colorText: Colors.white,
+            duration: const Duration(seconds: 3),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading doctors: $e');
+      Get.snackbar(
+        'Error',
+        'Failed to load doctors: ${e.toString()}',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: AppColors.errorColor,
+        colorText: Colors.white,
+        duration: const Duration(seconds: 5),
+      );
+    }
+  }
+
+  // Refresh doctors list
+  Future<void> _refreshDoctors() async {
+    try {
+      await _doctorController.refreshDoctors();
+
+      // If no doctors were found, show a message
+      if (_doctorController.doctors.isEmpty) {
+        // Check if there's a specific error message from the controller
+        if (_doctorController.errorMessage.isNotEmpty) {
+          // If there's a data integrity issue, show a more detailed message
+          if (_doctorController.errorMessage.contains('Data integrity issue')) {
+            Get.snackbar(
+              'Database Issue Detected',
+              'There appears to be a data integrity issue. Please use the "Fetch All Doctors" button to see all available doctors.',
+              snackPosition: SnackPosition.BOTTOM,
+              backgroundColor: Colors.orange,
+              colorText: Colors.white,
+              duration: const Duration(seconds: 5),
+            );
+          } else {
+            // Show the specific error message from the controller
+            Get.snackbar(
+              'No Doctors Found',
+              _doctorController.errorMessage,
+              snackPosition: SnackPosition.BOTTOM,
+              backgroundColor: Colors.orange,
+              colorText: Colors.white,
+              duration: const Duration(seconds: 5),
+            );
+          }
+        } else {
+          // Default message if no specific error is available
+          Get.snackbar(
+            'No Doctors Found',
+            'No approved doctors are currently available in the system. Please make sure you have at least one doctor with "approved" verification status.',
+            snackPosition: SnackPosition.BOTTOM,
+            backgroundColor: Colors.orange,
+            colorText: Colors.white,
+            duration: const Duration(seconds: 5),
+          );
+        }
+      } else {
+        Get.snackbar(
+          'Success',
+          'Found ${_doctorController.doctors.length} approved doctors',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.green,
+          colorText: Colors.white,
+          duration: const Duration(seconds: 3),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error refreshing doctors: $e');
+      Get.snackbar(
+        'Error',
+        'Failed to refresh doctors: ${e.toString()}',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: AppColors.errorColor,
+        colorText: Colors.white,
+        duration: const Duration(seconds: 5),
+      );
+    }
+  }
+
+  // Fetch all doctors regardless of verification status
+  Future<void> _fetchAllDoctors() async {
+    try {
+      await _doctorController.getAllDoctorsRegardlessOfStatus();
+
+      // If no doctors were found, show a message
+      if (_doctorController.doctors.isEmpty) {
+        // Check if there's a specific error message from the controller
+        if (_doctorController.errorMessage.isNotEmpty) {
+          // If there's a data integrity issue, show a more detailed message
+          if (_doctorController.errorMessage.contains('Data integrity issue')) {
+            Get.snackbar(
+              'Database Issue Detected',
+              'There appears to be a data integrity issue between the doctors and users tables. Please check your database consistency.',
+              snackPosition: SnackPosition.BOTTOM,
+              backgroundColor: Colors.orange,
+              colorText: Colors.white,
+              duration: const Duration(seconds: 5),
+            );
+          } else {
+            // Show the specific error message from the controller
+            Get.snackbar(
+              'No Doctors Found',
+              _doctorController.errorMessage,
+              snackPosition: SnackPosition.BOTTOM,
+              backgroundColor: Colors.orange,
+              colorText: Colors.white,
+              duration: const Duration(seconds: 5),
+            );
+          }
+        } else {
+          // Default message if no specific error is available
+          Get.snackbar(
+            'No Doctors Found',
+            'No doctors are currently available in the system.',
+            snackPosition: SnackPosition.BOTTOM,
+            backgroundColor: Colors.orange,
+            colorText: Colors.white,
+            duration: const Duration(seconds: 5),
+          );
+        }
+      } else {
+        Get.snackbar(
+          'Success',
+          'Found ${_doctorController.doctors.length} doctors (all statuses)',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.green,
+          colorText: Colors.white,
+          duration: const Duration(seconds: 3),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error fetching all doctors: $e');
+      Get.snackbar(
+        'Error',
+        'Failed to fetch all doctors: ${e.toString()}',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: AppColors.errorColor,
+        colorText: Colors.white,
+        duration: const Duration(seconds: 5),
+      );
+    }
+  }
+
+  // Show debug information
+  void _showDebugInfo() async {
+    // Get all doctors directly from Supabase for debugging
+    final supabaseService = Get.find<SupabaseService>();
+
+    // Use the new doctors_profile table
+    final allDoctors = await supabaseService.supabaseClient
+        .from('doctors_profile')
+        .select('id, verification_status');
+
+    final statuses =
+        allDoctors.map((d) => d['verification_status']).toSet().toList();
+
+    // Get user records for these doctor IDs
+    final doctorIds = allDoctors.map((d) => d['id']).toList();
+
+    // Check if these doctors have corresponding user records
+    final users = await supabaseService.supabaseClient
+        .from('users')
+        .select('id, user_type')
+        .filter('id', 'in', doctorIds);
+
+    // Find missing user records
+    final userIds = users.map((u) => u['id']).toSet();
+    final missingUserIds =
+        doctorIds.where((id) => !userIds.contains(id)).toList();
+
+    // Find incorrect user types
+    final incorrectTypeUsers =
+        users.where((u) => u['user_type'] != 'doctor').toList();
+
+    // If there are missing user records, try to create them
+    if (missingUserIds.isNotEmpty) {
+      debugPrint(
+        'Found ${missingUserIds.length} doctors without user records, attempting to fix...',
+      );
+
+      for (final doctorId in missingUserIds) {
+        try {
+          // Get doctor data
+          final doctorData =
+              await supabaseService.supabaseClient
+                  .from('doctors_profile')
+                  .select()
+                  .eq('id', doctorId)
+                  .single();
+
+          // Try to create a user record using the RPC function that bypasses RLS
+          try {
+            await supabaseService.supabaseClient.rpc(
+              'create_missing_user_record',
+              params: {
+                'doctor_id': doctorId,
+                'doctor_email':
+                    'doctor_${doctorId.toString().substring(0, 8)}@example.com',
+              },
+            );
+            debugPrint('Created user record using RPC function');
+          } catch (rpcError) {
+            debugPrint(
+              'RPC error: $rpcError, trying direct insert as fallback',
+            );
+
+            // Fallback to direct insert (might fail due to RLS)
+            try {
+              await supabaseService.supabaseClient.from('users').insert({
+                'id': doctorId,
+                'name': 'Dr. ${doctorData['specialization'] ?? 'Unknown'}',
+                'email':
+                    'doctor_${doctorId.toString().substring(0, 8)}@example.com',
+                'user_type': 'doctor',
+                'created_at': DateTime.now().toIso8601String(),
+                'updated_at': DateTime.now().toIso8601String(),
+              });
+            } catch (insertError) {
+              debugPrint('Direct insert also failed: $insertError');
+
+              // As a last resort, try to fix all integrity issues at once using a server function
+              try {
+                final result = await supabaseService.supabaseClient.rpc(
+                  'fix_all_doctor_user_integrity',
+                );
+                debugPrint('Attempted to fix all integrity issues: $result');
+              } catch (fixError) {
+                debugPrint('Failed to fix integrity issues: $fixError');
+                // Continue anyway, we'll try to refresh the users list
+              }
+            }
+          }
+
+          debugPrint('Created user record for doctor ID: $doctorId');
+        } catch (e) {
+          debugPrint('Error creating user record for doctor ID $doctorId: $e');
+        }
+      }
+
+      // Refresh the users list
+      final updatedUsers = await supabaseService.supabaseClient
+          .from('users')
+          .select('id, user_type')
+          .filter('id', 'in', doctorIds);
+
+      users.clear();
+      users.addAll(updatedUsers);
+    }
+
+    Get.dialog(
+      AlertDialog(
+        title: const Text('Debug Information'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Doctors count: ${_doctorController.doctors.length}'),
+              Text('Error message: ${_doctorController.errorMessage}'),
+              Text('Is loading: ${_doctorController.isLoading}'),
+              const Divider(),
+              Text('Database doctors count: ${allDoctors.length}'),
+              Text('Verification statuses in DB: $statuses'),
+              const Divider(),
+              Text('User records found: ${users.length}'),
+              Text('Missing user records: ${missingUserIds.length}'),
+              Text('Incorrect user types: ${incorrectTypeUsers.length}'),
+              if (missingUserIds.isNotEmpty)
+                Text('Missing user IDs: ${missingUserIds.join(", ")}'),
+              const Divider(),
+              const Text(
+                'Database Doctors:',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              ...allDoctors.map(
+                (doctor) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('ID: ${doctor['id']}'),
+                      Text('Status: ${doctor['verification_status']}'),
+                      const Divider(),
+                    ],
+                  ),
+                ),
+              ),
+              const Divider(),
+              const Text(
+                'Controller Doctors:',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              ..._doctorController.doctors.map(
+                (doctor) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Name: ${doctor.name}'),
+                      Text('ID: ${doctor.id}'),
+                      Text('Status: ${doctor.verificationStatus}'),
+                      const Divider(),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Get.back(), child: const Text('Close')),
+        ],
+      ),
+    );
   }
 
   // Apply filters and sorting
@@ -390,13 +742,33 @@ class _DoctorsScreenState extends State<DoctorsScreen> {
       appBar: AppBar(
         title: const Text('Find Doctors'),
         actions: [
+          // Fetch approved doctors button
+          IconButton(
+            icon: const Icon(Icons.verified_user),
+            tooltip: 'Fetch Approved Doctors',
+            onPressed: _refreshDoctors,
+          ),
+          // Fetch all doctors button
+          IconButton(
+            icon: const Icon(Icons.people_alt),
+            tooltip: 'Fetch All Doctors',
+            onPressed: _fetchAllDoctors,
+          ),
+
           IconButton(
             icon: const Icon(Icons.filter_list),
+            tooltip: 'Filter',
             onPressed: _showFilterBottomSheet,
           ),
           IconButton(
             icon: const Icon(Icons.sort),
+            tooltip: 'Sort',
             onPressed: _showSortBottomSheet,
+          ),
+          IconButton(
+            icon: const Icon(Icons.bug_report),
+            tooltip: 'Debug Info',
+            onPressed: _showDebugInfo,
           ),
         ],
       ),
@@ -432,6 +804,29 @@ class _DoctorsScreenState extends State<DoctorsScreen> {
               },
             ),
           ),
+
+          // Fetch All Doctors button
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: ElevatedButton.icon(
+              onPressed: _fetchAllDoctors,
+              icon: const Icon(Icons.people),
+              label: const Text('Fetch All Doctors'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primaryColor,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(
+                  vertical: 12,
+                  horizontal: 16,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 8),
 
           // Filter chips
           SingleChildScrollView(
@@ -549,13 +944,38 @@ class _DoctorsScreenState extends State<DoctorsScreen> {
                         'Try changing your search or filters',
                         style: TextStyle(color: Colors.grey),
                       ),
+                      const SizedBox(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          ElevatedButton.icon(
+                            onPressed: _refreshDoctors,
+                            icon: const Icon(Icons.verified_user),
+                            label: const Text('Approved Doctors'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primaryColor,
+                              foregroundColor: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          ElevatedButton.icon(
+                            onPressed: _fetchAllDoctors,
+                            icon: const Icon(Icons.people_alt),
+                            label: const Text('All Doctors'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.secondaryColor,
+                              foregroundColor: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
                     ],
                   ),
                 );
               }
 
               return RefreshIndicator(
-                onRefresh: _loadDoctors,
+                onRefresh: _refreshDoctors,
                 child: ListView.builder(
                   padding: const EdgeInsets.all(16),
                   itemCount: filteredDoctors.length,

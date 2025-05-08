@@ -74,6 +74,8 @@ class DoctorCard extends StatelessWidget {
                   ),
                 ],
               ),
+              const SizedBox(height: 4),
+              _buildVerificationStatus(),
             ],
           ),
         ),
@@ -178,6 +180,13 @@ class DoctorCard extends StatelessWidget {
           'Consultation Fee',
           doctor.formattedConsultationFee,
         ),
+        const SizedBox(height: 8),
+        _buildInfoRow(
+          _getVerificationIcon(),
+          'Verification Status',
+          _getVerificationText(),
+          textColor: _getVerificationColor(),
+        ),
         const SizedBox(height: 16),
         if (doctor.about != null && doctor.about!.isNotEmpty) ...[
           const Text(
@@ -246,10 +255,15 @@ class DoctorCard extends StatelessWidget {
     );
   }
 
-  Widget _buildInfoRow(IconData icon, String label, String value) {
+  Widget _buildInfoRow(
+    IconData icon,
+    String label,
+    String value, {
+    Color? textColor,
+  }) {
     return Row(
       children: [
-        Icon(icon, size: 18, color: AppColors.secondaryColor),
+        Icon(icon, size: 18, color: textColor ?? AppColors.secondaryColor),
         const SizedBox(width: 8),
         Text(
           '$label:',
@@ -259,13 +273,47 @@ class DoctorCard extends StatelessWidget {
         Expanded(
           child: Text(
             value,
-            style: TextStyle(color: Colors.grey[700], fontSize: 14),
+            style: TextStyle(
+              color: textColor ?? Colors.grey[700],
+              fontSize: 14,
+              fontWeight:
+                  textColor != null ? FontWeight.w500 : FontWeight.normal,
+            ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
         ),
       ],
     );
+  }
+
+  // Helper methods for verification status
+  IconData _getVerificationIcon() {
+    switch (doctor.verificationStatus.toLowerCase()) {
+      case 'approved':
+        return Icons.verified;
+      case 'rejected':
+        return Icons.cancel;
+      case 'pending':
+      default:
+        return Icons.pending;
+    }
+  }
+
+  String _getVerificationText() {
+    return doctor.formattedVerificationStatus;
+  }
+
+  Color _getVerificationColor() {
+    switch (doctor.verificationStatus.toLowerCase()) {
+      case 'approved':
+        return Colors.green;
+      case 'rejected':
+        return Colors.red;
+      case 'pending':
+      default:
+        return Colors.orange;
+    }
   }
 
   Widget _buildAvailabilityChip(String label, IconData icon, bool isAvailable) {
@@ -306,6 +354,47 @@ class DoctorCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildVerificationStatus() {
+    // Define colors and icons based on verification status
+    Color statusColor;
+    IconData statusIcon;
+    String statusText;
+
+    switch (doctor.verificationStatus.toLowerCase()) {
+      case 'approved':
+        statusColor = Colors.green;
+        statusIcon = Icons.verified;
+        statusText = 'Verified';
+        break;
+      case 'rejected':
+        statusColor = Colors.red;
+        statusIcon = Icons.cancel;
+        statusText = 'Rejected';
+        break;
+      case 'pending':
+      default:
+        statusColor = Colors.orange;
+        statusIcon = Icons.pending;
+        statusText = 'Pending Verification';
+        break;
+    }
+
+    return Row(
+      children: [
+        Icon(statusIcon, size: 14, color: statusColor),
+        const SizedBox(width: 4),
+        Text(
+          statusText,
+          style: TextStyle(
+            color: statusColor,
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
     );
   }
 }

@@ -115,7 +115,7 @@ class SupabaseService {
     return _supabaseClient.auth.currentUser;
   }
 
-  // Create user profile in the database
+  // Create user profile in the database using the new data model
   Future<void> createUserProfile({
     required String userId,
     required String email,
@@ -124,58 +124,95 @@ class SupabaseService {
     Map<String, dynamic>? additionalData,
   }) async {
     try {
-      // Insert into users table
-      await _supabaseClient.from('users').insert({
+      debugPrint('Creating user profile with new data model...');
+
+      // Prepare the user data
+      final userData = {
         'id': userId,
         'email': email,
         'name': name,
         'user_type': userType.toString().split('.').last,
         'phone': additionalData?['phone'] ?? '',
         'profile_image': additionalData?['profileImage'],
-      });
+        'created_at': DateTime.now().toIso8601String(),
+        'updated_at': DateTime.now().toIso8601String(),
+      };
 
-      // Insert into specific user type table based on userType
+      // Insert into users table
+      await _supabaseClient.from('users').insert(userData);
+      debugPrint(
+        'Created user record with ID: $userId and type: ${userType.toString().split('.').last}',
+      );
+
+      // Insert into specific profile table based on userType
       switch (userType) {
         case UserType.patient:
-          await _supabaseClient.from('patients').insert({
+          // Insert into patients_profile table
+          await _supabaseClient.from('patients_profile').insert({
             'id': userId,
             'age': additionalData?['age'],
             'gender': additionalData?['gender'],
             'blood_group': additionalData?['bloodGroup'],
             'height': additionalData?['height'],
             'weight': additionalData?['weight'],
+            'created_at': DateTime.now().toIso8601String(),
+            'updated_at': DateTime.now().toIso8601String(),
           });
+          debugPrint('Created patient profile with ID: $userId');
           break;
         case UserType.doctor:
-          await _supabaseClient.from('doctors').insert({
+          // Insert into doctors_profile table
+          await _supabaseClient.from('doctors_profile').insert({
             'id': userId,
             'specialization':
                 additionalData?['specialization'] ?? 'General Practitioner',
-            'hospital': additionalData?['hospital'],
-            'license_number': additionalData?['licenseNumber'],
+            'hospital': additionalData?['hospital'] ?? '',
+            'license_number': additionalData?['licenseNumber'] ?? '',
             'experience': additionalData?['experience'] ?? 0,
             'is_available_for_chat':
                 additionalData?['isAvailableForChat'] ?? false,
             'is_available_for_video':
                 additionalData?['isAvailableForVideo'] ?? false,
+            'verification_status': 'pending',
+            'created_at': DateTime.now().toIso8601String(),
+            'updated_at': DateTime.now().toIso8601String(),
           });
+          debugPrint('Created doctor profile with ID: $userId');
           break;
         case UserType.admin:
-          await _supabaseClient.from('admins').insert({
+          // Insert into admins_profile table
+          await _supabaseClient.from('admins_profile').insert({
             'id': userId,
             'admin_role': additionalData?['adminRole'] ?? 'content_admin',
+            'created_at': DateTime.now().toIso8601String(),
+            'updated_at': DateTime.now().toIso8601String(),
           });
+          debugPrint('Created admin profile with ID: $userId');
           break;
       }
+
+      // Verify the user record exists and has the correct user_type
+      final userCheck =
+          await _supabaseClient
+              .from('users')
+              .select('id, user_type')
+              .eq('id', userId)
+              .single();
+
+      debugPrint(
+        'User verification: ID=${userCheck['id']}, Type=${userCheck['user_type']}',
+      );
     } catch (e) {
       debugPrint('Error creating user profile: $e');
       rethrow;
     }
   }
 
-  // Get user profile from the database
+  // Get user profile from the database using the new data model
   Future<UserModel?> getUserProfile(String userId) async {
     try {
+      debugPrint('Getting user profile with new data model...');
+
       // Get user from users table
       final userData =
           await _supabaseClient
@@ -197,7 +234,7 @@ class SupabaseService {
         case UserType.patient:
           final patientData =
               await _supabaseClient
-                  .from('patients')
+                  .from('patients_profile')
                   .select()
                   .eq('id', userId)
                   .maybeSingle();
@@ -209,16 +246,20 @@ class SupabaseService {
               'bloodGroup': patientData['blood_group'],
               'height': patientData['height'],
               'weight': patientData['weight'],
+              'medicalHistory': patientData['medical_history'],
+              'allergies': patientData['allergies'],
             };
 
-            // Get allergies
-            final allergies = await _supabaseClient
-                .from('patient_allergies')
-                .select('allergy')
-                .eq('patient_id', userId);
+            // Get allergies from the separate table if not in the profile
+            if (additionalData['allergies'] == null) {
+              final allergies = await _supabaseClient
+                  .from('patient_allergies')
+                  .select('allergy')
+                  .eq('patient_id', userId);
 
-            additionalData['allergies'] =
-                allergies.map((e) => e['allergy'] as String).toList();
+              additionalData['allergies'] =
+                  allergies.map((e) => e['allergy'] as String).toList();
+            }
 
             // Get chronic conditions
             final conditions = await _supabaseClient
@@ -242,7 +283,7 @@ class SupabaseService {
         case UserType.doctor:
           final doctorData =
               await _supabaseClient
-                  .from('doctors')
+                  .from('doctors_profile')
                   .select()
                   .eq('id', userId)
                   .maybeSingle();
@@ -255,6 +296,11 @@ class SupabaseService {
               'experience': doctorData['experience'],
               'isAvailableForChat': doctorData['is_available_for_chat'],
               'isAvailableForVideo': doctorData['is_available_for_video'],
+              'verificationStatus': doctorData['verification_status'],
+              'consultationFee': doctorData['consultation_fee'],
+              'rating': doctorData['rating'],
+              'about': doctorData['about'],
+              'city': doctorData['city'],
             };
 
             // Get qualifications
@@ -267,27 +313,67 @@ class SupabaseService {
                 qualifications
                     .map((e) => e['qualification'] as String)
                     .toList();
+          } else {
+            // Try the old table as fallback during migration
+            final oldDoctorData =
+                await _supabaseClient
+                    .from('doctors')
+                    .select()
+                    .eq('id', userId)
+                    .maybeSingle();
+
+            if (oldDoctorData != null) {
+              additionalData = {
+                'specialization': oldDoctorData['specialization'],
+                'hospital': oldDoctorData['hospital'],
+                'licenseNumber': oldDoctorData['license_number'],
+                'experience': oldDoctorData['experience'],
+                'isAvailableForChat': oldDoctorData['is_available_for_chat'],
+                'isAvailableForVideo': oldDoctorData['is_available_for_video'],
+                'verificationStatus': oldDoctorData['verification_status'],
+              };
+
+              debugPrint('Using old doctors table data as fallback');
+            }
           }
           break;
         case UserType.admin:
           final adminData =
               await _supabaseClient
-                  .from('admins')
+                  .from('admins_profile')
                   .select()
                   .eq('id', userId)
                   .maybeSingle();
 
           if (adminData != null) {
-            additionalData = {'adminRole': adminData['admin_role']};
+            additionalData = {
+              'adminRole': adminData['admin_role'],
+              'permissions': adminData['permissions'],
+            };
 
-            // Get permissions
-            final permissions = await _supabaseClient
-                .from('admin_permissions')
-                .select('permission')
-                .eq('admin_id', userId);
+            // Get permissions from separate table if not in profile
+            if (additionalData['permissions'] == null) {
+              final permissions = await _supabaseClient
+                  .from('admin_permissions')
+                  .select('permission')
+                  .eq('admin_id', userId);
 
-            additionalData['permissions'] =
-                permissions.map((e) => e['permission'] as String).toList();
+              additionalData['permissions'] =
+                  permissions.map((e) => e['permission'] as String).toList();
+            }
+          } else {
+            // Try the old table as fallback during migration
+            final oldAdminData =
+                await _supabaseClient
+                    .from('admins')
+                    .select()
+                    .eq('id', userId)
+                    .maybeSingle();
+
+            if (oldAdminData != null) {
+              additionalData = {'adminRole': oldAdminData['admin_role']};
+              debugPrint('Using old admins table data as fallback');
+            }
           }
           break;
       }
@@ -2166,15 +2252,484 @@ class SupabaseService {
       });
 
       // Update the doctor's verification status to 'pending'
-      await _supabaseClient
-          .from('doctors')
-          .update({'verification_status': 'pending'})
-          .eq('id', doctorId);
+      await updateDoctorVerificationStatus(doctorId, 'pending');
 
       return fileUrl;
     } catch (e) {
       debugPrint('Error uploading verification document: $e');
       rethrow;
+    }
+  }
+
+  /// Update doctor verification status
+  Future<bool> updateDoctorVerificationStatus(
+    String doctorId,
+    String status, {
+    String? rejectionReason,
+    String? verifiedBy,
+  }) async {
+    try {
+      debugPrint(
+        'SupabaseService: Updating doctor verification status for doctor $doctorId to $status',
+      );
+
+      // Check if the doctor exists in the doctors_profile table
+      bool doctorExists = true;
+      try {
+        // First, check if the doctor exists
+        final doctorCheck =
+            await _supabaseClient
+                .from('doctors_profile')
+                .select('id, verification_status')
+                .eq('id', doctorId)
+                .single();
+
+        debugPrint(
+          'SupabaseService: Doctor check result: ${doctorCheck.toString()}',
+        );
+      } catch (e) {
+        debugPrint(
+          'SupabaseService: Doctor not found in doctors_profile table: $e',
+        );
+        doctorExists = false;
+      }
+
+      // If doctor doesn't exist in the new profile table, check if they exist in the old table
+      if (!doctorExists) {
+        debugPrint(
+          'SupabaseService: Doctor not found in doctors_profile table, checking old doctors table',
+        );
+        try {
+          final oldDoctorData =
+              await _supabaseClient
+                  .from('doctors')
+                  .select('*')
+                  .eq('id', doctorId)
+                  .single();
+
+          // If found in old table, migrate to new table
+          debugPrint(
+            'SupabaseService: Doctor found in old table, migrating to new table',
+          );
+
+          await _supabaseClient.from('doctors_profile').insert({
+            'id': doctorId,
+            'specialization':
+                oldDoctorData['specialization'] ?? 'General Practitioner',
+            'hospital': oldDoctorData['hospital'] ?? '',
+            'license_number': oldDoctorData['license_number'] ?? '',
+            'experience': oldDoctorData['experience'] ?? 0,
+            'rating': oldDoctorData['rating'] ?? 0,
+            'consultation_fee': oldDoctorData['consultation_fee'] ?? 0,
+            'is_available_for_chat':
+                oldDoctorData['is_available_for_chat'] ?? false,
+            'is_available_for_video':
+                oldDoctorData['is_available_for_video'] ?? false,
+            'verification_status': 'pending',
+            'about': oldDoctorData['about'] ?? '',
+            'city': oldDoctorData['city'] ?? '',
+            'created_at': DateTime.now().toIso8601String(),
+            'updated_at': DateTime.now().toIso8601String(),
+          });
+
+          doctorExists = true;
+          debugPrint(
+            'SupabaseService: Successfully migrated doctor to new profile table',
+          );
+        } catch (migrationError) {
+          debugPrint(
+            'SupabaseService: Error migrating doctor: $migrationError',
+          );
+        }
+      }
+
+      // Get all doctors to check verification statuses
+      final allDoctors = await _supabaseClient
+          .from('doctors_profile')
+          .select('id, verification_status');
+
+      debugPrint(
+        'SupabaseService: All doctors in database: ${allDoctors.length}',
+      );
+
+      // Log each doctor's verification status
+      for (var doctor in allDoctors) {
+        debugPrint(
+          'SupabaseService: Doctor ID: ${doctor['id']}, Status: ${doctor['verification_status']}',
+        );
+      }
+
+      // Ensure consistent case for verification status
+      String normalizedStatus = status.toLowerCase();
+      debugPrint(
+        'SupabaseService: Normalizing status from "$status" to "$normalizedStatus"',
+      );
+
+      final Map<String, dynamic> updateData = {
+        'verification_status': normalizedStatus,
+        'verification_date': DateTime.now().toIso8601String(),
+      };
+
+      if (rejectionReason != null) {
+        updateData['rejection_reason'] = rejectionReason;
+      } else if (normalizedStatus == 'approved') {
+        // Clear rejection reason when approving
+        updateData['rejection_reason'] = null;
+      }
+
+      if (verifiedBy != null) {
+        updateData['verified_by'] = verifiedBy;
+      } else {
+        // Use current user ID if available
+        final currentUser = _supabaseClient.auth.currentUser;
+        if (currentUser != null) {
+          updateData['verified_by'] = currentUser.id;
+        }
+      }
+
+      // Try direct update with retry mechanism
+      int retryCount = 0;
+      bool updateSuccess = false;
+      Exception? lastError;
+
+      while (!updateSuccess && retryCount < 3) {
+        try {
+          retryCount++;
+
+          // Update the doctor's verification status in the doctors_profile table
+          await _supabaseClient
+              .from('doctors_profile')
+              .update(updateData)
+              .eq('id', doctorId);
+
+          // Verify the update was successful
+          final verifyUpdate =
+              await _supabaseClient
+                  .from('doctors_profile')
+                  .select('verification_status, rejection_reason')
+                  .eq('id', doctorId)
+                  .single();
+
+          debugPrint(
+            'SupabaseService: Verification after update (attempt $retryCount): ${verifyUpdate.toString()}',
+          );
+
+          if (verifyUpdate['verification_status'].toString().toLowerCase() ==
+              normalizedStatus) {
+            debugPrint(
+              'SupabaseService: Update successful on attempt $retryCount',
+            );
+            updateSuccess = true;
+            break;
+          } else {
+            debugPrint(
+              'SupabaseService: Update did not take effect on attempt $retryCount. Expected: $normalizedStatus, Got: ${verifyUpdate['verification_status']}',
+            );
+            await Future.delayed(Duration(milliseconds: 500));
+          }
+        } catch (e) {
+          lastError = e as Exception;
+          debugPrint(
+            'SupabaseService: Error updating doctor status (attempt $retryCount): $e',
+          );
+          await Future.delayed(Duration(milliseconds: 500));
+        }
+      }
+
+      if (!updateSuccess && lastError != null) {
+        throw lastError;
+      }
+
+      return updateSuccess;
+    } catch (e) {
+      debugPrint(
+        'SupabaseService: Error updating doctor verification status: $e',
+      );
+      return false;
+    }
+  }
+
+  /// Fix data integrity issues by creating missing user records for doctors
+  Future<bool> fixDoctorUserRecords(List<String> doctorIds) async {
+    try {
+      debugPrint('==== DATA INTEGRITY FIX ====');
+      debugPrint(
+        'Attempting to fix data integrity for ${doctorIds.length} doctors',
+      );
+      debugPrint('Doctor IDs to fix: $doctorIds');
+
+      int successCount = 0;
+      List<String> failedIds = [];
+      List<String> createdIds = [];
+      List<String> updatedIds = [];
+
+      for (final doctorId in doctorIds) {
+        try {
+          // Get doctor details to use for creating a better user record
+          Map<String, dynamic>? doctorDetails;
+          try {
+            doctorDetails =
+                await _supabaseClient
+                    .from('doctors')
+                    .select('specialization, hospital, verification_status')
+                    .eq('id', doctorId)
+                    .single();
+
+            debugPrint(
+              'Found doctor details for ID: $doctorId - ${doctorDetails.toString()}',
+            );
+          } catch (e) {
+            debugPrint('Error getting doctor details: $e');
+            // Continue anyway, we'll use default values
+          }
+
+          // Check if user record already exists
+          final existingUser =
+              await _supabaseClient
+                  .from('users')
+                  .select()
+                  .eq('id', doctorId)
+                  .maybeSingle();
+
+          if (existingUser != null) {
+            debugPrint('User record already exists for doctor ID: $doctorId');
+
+            // If user exists but user_type is not doctor, update it
+            if (existingUser['user_type'] != 'doctor') {
+              await _supabaseClient
+                  .from('users')
+                  .update({'user_type': 'doctor'})
+                  .eq('id', doctorId);
+              debugPrint('Updated user_type to doctor for ID: $doctorId');
+              updatedIds.add(doctorId);
+            }
+
+            successCount++;
+            continue;
+          }
+
+          // Create a new user record for this doctor
+          String specialization =
+              doctorDetails?['specialization'] ?? 'General Practitioner';
+
+          // Create a better default name based on specialization
+          String defaultName = 'Dr. ${specialization.split(' ').first}';
+
+          // Use RPC function to bypass RLS
+          // This requires creating a stored procedure in Supabase
+          try {
+            // First try using an RPC function that has admin privileges
+            await _supabaseClient.rpc(
+              'admin_create_user_for_doctor',
+              params: {
+                'doctor_id': doctorId,
+                'user_name': defaultName,
+                'user_email': 'doctor_${doctorId.substring(0, 8)}@example.com',
+              },
+            );
+            debugPrint('Created user record via RPC for doctor ID: $doctorId');
+          } catch (rpcError) {
+            debugPrint('RPC error: $rpcError');
+
+            // Fallback: Try to create a temporary auth user and link it
+            try {
+              // Generate a random password
+              final password = 'Temp${DateTime.now().millisecondsSinceEpoch}';
+              final email = 'doctor_${doctorId.substring(0, 8)}@example.com';
+
+              // Create a user in auth
+              final authResponse = await _supabaseClient.auth.signUp(
+                email: email,
+                password: password,
+              );
+
+              if (authResponse.user != null) {
+                // Now try to update the user ID to match the doctor ID
+                await _supabaseClient.rpc(
+                  'admin_update_user_id',
+                  params: {'old_id': authResponse.user!.id, 'new_id': doctorId},
+                );
+
+                // Update user metadata
+                await _supabaseClient.rpc(
+                  'admin_update_user_type',
+                  params: {'user_id': doctorId, 'user_type': 'doctor'},
+                );
+
+                debugPrint(
+                  'Created user via auth API for doctor ID: $doctorId',
+                );
+              } else {
+                throw Exception('Failed to create auth user');
+              }
+            } catch (authError) {
+              debugPrint('Auth API error: $authError');
+              throw Exception('Failed to create user record: $authError');
+            }
+          }
+
+          debugPrint('Created new user record for doctor ID: $doctorId');
+          createdIds.add(doctorId);
+          successCount++;
+        } catch (e) {
+          final errorMsg =
+              'Failed to fix user record for doctor ID: $doctorId - Error: $e';
+          debugPrint('==== ERROR ====');
+          debugPrint(errorMsg);
+          debugPrint('===============');
+          failedIds.add(doctorId);
+        }
+      }
+
+      debugPrint('==== FIX SUMMARY ====');
+      debugPrint('Fixed $successCount/${doctorIds.length} doctor records');
+      debugPrint('Created ${createdIds.length} new user records: $createdIds');
+      debugPrint(
+        'Updated ${updatedIds.length} existing user records: $updatedIds',
+      );
+
+      if (failedIds.isNotEmpty) {
+        debugPrint('Failed to fix ${failedIds.length} records: $failedIds');
+      }
+      debugPrint('=====================');
+
+      return successCount > 0;
+    } catch (e) {
+      final errorMsg = 'Error fixing doctor user records: $e';
+      debugPrint('==== ERROR ====');
+      debugPrint(errorMsg);
+      debugPrint('===============');
+      return false;
+    }
+  }
+
+  /// Automatically detect and fix all doctor-user integrity issues
+  Future<Map<String, dynamic>> autoFixDoctorUserIntegrity() async {
+    try {
+      debugPrint('==== AUTO DATA INTEGRITY FIX ====');
+      debugPrint('Starting automatic data integrity fix process');
+
+      // 1. Get all doctors
+      final allDoctors = await _supabaseClient
+          .from('doctors')
+          .select('id, verification_status');
+
+      if (allDoctors.isEmpty) {
+        debugPrint('No doctors found in the database');
+        return {
+          'success': false,
+          'message': 'No doctors found in the database',
+          'fixed_count': 0,
+          'total_count': 0,
+        };
+      }
+
+      final doctorIds = allDoctors.map((d) => d['id'].toString()).toList();
+      debugPrint('Found ${doctorIds.length} doctors in the database');
+
+      // Log each doctor's ID and verification status
+      for (var doctor in allDoctors) {
+        debugPrint(
+          'Doctor ID: ${doctor['id']}, Status: ${doctor['verification_status'] ?? 'null'}',
+        );
+      }
+
+      // 2. Get all users with these doctor IDs
+      final existingUsers = await _supabaseClient
+          .from('users')
+          .select('id, user_type')
+          .filter('id', 'in', doctorIds);
+
+      debugPrint(
+        'Found ${existingUsers.length} existing user records for doctors',
+      );
+
+      // 3. Identify doctors without corresponding user records
+      final existingUserIds =
+          existingUsers.map((u) => u['id'].toString()).toSet();
+      final missingUserIds =
+          doctorIds.where((id) => !existingUserIds.contains(id)).toList();
+
+      debugPrint('Found ${missingUserIds.length} doctors without user records');
+      if (missingUserIds.isNotEmpty) {
+        debugPrint('Missing user records for doctor IDs: $missingUserIds');
+      }
+
+      // 4. Identify users with incorrect user_type
+      final incorrectTypeUsers =
+          existingUsers.where((u) => u['user_type'] != 'doctor').toList();
+      final incorrectTypeIds =
+          incorrectTypeUsers.map((u) => u['id'].toString()).toList();
+
+      debugPrint(
+        'Found ${incorrectTypeIds.length} users with incorrect user_type',
+      );
+      if (incorrectTypeIds.isNotEmpty) {
+        debugPrint('Incorrect user_type for doctor IDs: $incorrectTypeIds');
+      }
+
+      // 5. Combine both lists for fixing
+      final idsToFix = [...missingUserIds, ...incorrectTypeIds];
+
+      if (idsToFix.isEmpty) {
+        debugPrint('No data integrity issues found to fix');
+        return {
+          'success': true,
+          'message': 'No data integrity issues found',
+          'fixed_count': 0,
+          'total_count': doctorIds.length,
+        };
+      }
+
+      // 6. Fix the issues
+      await fixDoctorUserRecords(idsToFix);
+
+      // 7. Verify the fix
+      final verifyUsers = await _supabaseClient
+          .from('users')
+          .select('id, user_type')
+          .filter('id', 'in', doctorIds);
+
+      final verifyDoctorUserIds =
+          verifyUsers
+              .where((u) => u['user_type'] == 'doctor')
+              .map((u) => u['id'].toString())
+              .toSet();
+
+      final stillMissingIds =
+          doctorIds.where((id) => !verifyDoctorUserIds.contains(id)).toList();
+
+      final success = stillMissingIds.isEmpty;
+
+      debugPrint('==== AUTO FIX SUMMARY ====');
+      debugPrint('Total doctors: ${doctorIds.length}');
+      debugPrint('Issues fixed: ${idsToFix.length - stillMissingIds.length}');
+      debugPrint('Success: $success');
+
+      if (!success) {
+        debugPrint(
+          'Still missing user records for doctor IDs: $stillMissingIds',
+        );
+      }
+
+      return {
+        'success': success,
+        'message':
+            success
+                ? 'Successfully fixed all doctor-user integrity issues'
+                : 'Fixed some issues but ${stillMissingIds.length} still remain',
+        'fixed_count': idsToFix.length - stillMissingIds.length,
+        'total_count': doctorIds.length,
+        'still_missing': stillMissingIds,
+      };
+    } catch (e) {
+      debugPrint('Error in autoFixDoctorUserIntegrity: $e');
+      return {
+        'success': false,
+        'message': 'Error fixing doctor-user integrity: $e',
+        'fixed_count': 0,
+        'total_count': 0,
+      };
     }
   }
 
@@ -2202,9 +2757,9 @@ class SupabaseService {
         'uploaded_at': DateTime.now().toIso8601String(),
       });
 
-      // Update the doctor's verification status to 'pending'
+      // Update the doctor's verification status to 'pending' in the new profile table
       await _supabaseClient
-          .from('doctors')
+          .from('doctors_profile')
           .update({'verification_status': 'pending'})
           .eq('id', doctorId);
 
@@ -2241,92 +2796,14 @@ class SupabaseService {
     }
   }
 
-  /// Update doctor verification status
-  Future<void> updateDoctorVerificationStatus(
-    String doctorId,
-    String status, {
-    String? rejectionReason,
-    String? verifiedBy,
-  }) async {
-    try {
-      debugPrint(
-        'SupabaseService: Updating doctor verification status for doctor $doctorId to $status',
-      );
-
-      // First, check if the doctor exists
-      final doctorCheck =
-          await _supabaseClient
-              .from('doctors')
-              .select('id, verification_status')
-              .eq('id', doctorId)
-              .single();
-
-      debugPrint(
-        'SupabaseService: Doctor check result: ${doctorCheck.toString()}',
-      );
-
-      final Map<String, dynamic> updateData = {
-        'verification_status': status,
-        'verification_date': DateTime.now().toIso8601String(),
-      };
-
-      if (rejectionReason != null) {
-        updateData['rejection_reason'] = rejectionReason;
-      } else if (status == 'approved') {
-        // Clear rejection reason when approving
-        updateData['rejection_reason'] = null;
-      }
-
-      if (verifiedBy != null) {
-        updateData['verified_by'] = verifiedBy;
-      }
-
-      // Update the doctor's verification status
-      final updateResult = await _supabaseClient
-          .from('doctors')
-          .update(updateData)
-          .eq('id', doctorId);
-
-      debugPrint('SupabaseService: Update result: $updateResult');
-
-      // Verify the update was successful
-      final verifyUpdate =
-          await _supabaseClient
-              .from('doctors')
-              .select('verification_status, rejection_reason')
-              .eq('id', doctorId)
-              .single();
-
-      debugPrint(
-        'SupabaseService: Verification after update: ${verifyUpdate.toString()}',
-      );
-
-      if (verifyUpdate['verification_status'] != status) {
-        debugPrint(
-          'SupabaseService: WARNING - Status was not updated correctly!',
-        );
-        throw Exception('Failed to update doctor verification status');
-      }
-
-      debugPrint(
-        'SupabaseService: Doctor verification status updated successfully',
-      );
-    } catch (e) {
-      debugPrint(
-        'SupabaseService: Error updating doctor verification status: $e',
-      );
-      rethrow;
-    }
-  }
-
   // ==================== DOCTOR PROFILE MANAGEMENT ====================
 
   /// Update doctor profile
   Future<void> updateDoctorProfile(DoctorModel doctor) async {
     try {
-      // Update doctor information in the doctors table
+      // Update doctor information in the doctors_profile table
       await _supabaseClient
-          .from('doctors')
+          .from('doctors_profile')
           .update({
             'specialization': doctor.specialization,
             'hospital': doctor.hospital,
@@ -2737,14 +3214,35 @@ class SupabaseService {
               .eq('created_at::date', currentDate)
               .count();
 
-      final doctorData =
-          await _supabaseClient
-              .from('doctors')
-              .select('rating')
-              .eq('id', doctorId)
-              .single();
+      // Get doctor rating from the new profile table
+      double averageRating = 0.0;
+      try {
+        final doctorData =
+            await _supabaseClient
+                .from('doctors_profile')
+                .select('rating')
+                .eq('id', doctorId)
+                .single();
 
-      final averageRating = doctorData['rating']?.toDouble() ?? 0.0;
+        averageRating = doctorData['rating']?.toDouble() ?? 0.0;
+      } catch (e) {
+        debugPrint('Error getting doctor rating: $e');
+        // Try the old table as fallback
+        try {
+          final oldDoctorData =
+              await _supabaseClient
+                  .from('doctors')
+                  .select('rating')
+                  .eq('id', doctorId)
+                  .single();
+
+          averageRating = oldDoctorData['rating']?.toDouble() ?? 0.0;
+        } catch (fallbackError) {
+          debugPrint(
+            'Error getting doctor rating from old table: $fallbackError',
+          );
+        }
+      }
 
       final reviewsCount =
           await _supabaseClient
@@ -3146,10 +3644,10 @@ class SupabaseService {
                 .eq('id', doctorId)
                 .single();
 
-        // Get doctor data
+        // Get doctor data from the new profile table
         final doctorData =
             await _supabaseClient
-                .from('doctors')
+                .from('doctors_profile')
                 .select()
                 .eq('id', doctorId)
                 .single();

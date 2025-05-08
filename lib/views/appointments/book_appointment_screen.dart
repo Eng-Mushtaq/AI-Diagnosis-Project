@@ -29,9 +29,47 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
   final RxString _selectedAppointmentType = 'video'.obs;
 
   @override
+  void initState() {
+    super.initState();
+    // Load doctor's existing appointments
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadDoctorAppointments();
+    });
+  }
+
+  @override
   void dispose() {
     _reasonController.dispose();
     super.dispose();
+  }
+
+  // Load doctor's existing appointments
+  Future<void> _loadDoctorAppointments() async {
+    final doctor = _doctorController.selectedDoctor;
+    if (doctor != null) {
+      try {
+        // Get user appointments to check for conflicts
+        await _appointmentController.getUserAppointments(
+          _authController.user!.id,
+        );
+
+        // Set initial date to next available date
+        final nextAvailableDate = _appointmentController.getNextAvailableDate(
+          doctor,
+        );
+        if (nextAvailableDate != null) {
+          _appointmentController.setSelectedDate(nextAvailableDate);
+        }
+      } catch (e) {
+        Get.snackbar(
+          'Error',
+          'Failed to load doctor\'s schedule. Please try again.',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: AppColors.errorColor,
+          colorText: Colors.white,
+        );
+      }
+    }
   }
 
   // Handle book appointment button press
@@ -90,6 +128,11 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
         );
       }
     }
+  }
+
+  // Check if two dates are the same day
+  bool _isSameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
   }
 
   // Build date selector
@@ -603,12 +646,5 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
         ),
       ),
     );
-  }
-
-  // Check if two dates are the same day
-  bool _isSameDay(DateTime date1, DateTime date2) {
-    return date1.year == date2.year &&
-        date1.month == date2.month &&
-        date1.day == date2.day;
   }
 }

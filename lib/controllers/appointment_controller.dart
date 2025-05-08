@@ -310,7 +310,34 @@ class AppointmentController extends GetxController {
       return [];
     }
 
-    return doctor.availableTimeSlots![dayOfWeek]!;
+    // Get all available time slots for the day
+    final allTimeSlots = doctor.availableTimeSlots![dayOfWeek]!;
+
+    // Filter out already booked time slots
+    final bookedTimeSlots = _getBookedTimeSlots(doctor.id, _selectedDate.value);
+
+    return allTimeSlots
+        .where((slot) => !bookedTimeSlots.contains(slot))
+        .toList();
+  }
+
+  // Get already booked time slots for a specific doctor and date
+  List<String> _getBookedTimeSlots(String doctorId, DateTime date) {
+    // Check if the date is the same (year, month, day)
+    bool isSameDate(DateTime a, DateTime b) {
+      return a.year == b.year && a.month == b.month && a.day == b.day;
+    }
+
+    // Filter appointments for the specified doctor and date
+    return _appointments
+        .where(
+          (appointment) =>
+              appointment.doctorId == doctorId &&
+              isSameDate(appointment.appointmentDate, date) &&
+              appointment.status == 'scheduled',
+        )
+        .map((appointment) => appointment.timeSlot)
+        .toList();
   }
 
   // Get day of week as string

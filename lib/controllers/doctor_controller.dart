@@ -31,37 +31,320 @@ class DoctorController extends GetxController {
     _errorMessage.value = '';
 
     try {
+      // Always clear the doctors list to ensure fresh data
+      _doctors.clear();
+
+      debugPrint('Fetching doctors from Supabase...');
+
       // Try to get doctors from Supabase
-      // First, get doctors with approved verification status
-      final doctorIds = await _supabaseService.supabaseClient
-          .from('doctors')
-          .select('id')
-          .eq('verification_status', 'approved');
+      // First, get all doctors to check what's in the database (using new data model)
+      final allDoctors = await _supabaseService.supabaseClient
+          .from('doctors_profile')
+          .select('id, verification_status');
+
+      debugPrint('Total doctors in database: ${allDoctors.length}');
+
+      // Log all verification statuses to debug
+      final statuses =
+          allDoctors.map((d) => d['verification_status']).toSet().toList();
+      debugPrint('Verification statuses in database: $statuses');
+
+      // Log each doctor's ID and verification status for debugging
+      for (var doctor in allDoctors) {
+        debugPrint(
+          'Doctor ID: ${doctor['id']}, Status: ${doctor['verification_status']}',
+        );
+      }
+
+      // Get doctors with approved verification status (case insensitive)
+      // Also check for capitalized "Approved" or any other case variations
+      final doctorIds =
+          allDoctors
+              .where(
+                (d) =>
+                    d['verification_status'] != null &&
+                    (d['verification_status'].toString().toLowerCase() ==
+                            'approved' ||
+                        d['verification_status'].toString() == 'Approved' ||
+                        d['verification_status'].toString() == 'APPROVED'),
+              )
+              .map((d) => d['id'])
+              .toList();
 
       if (doctorIds.isEmpty) {
-        _doctors.clear();
-        debugPrint('No approved doctors found');
+        debugPrint('No approved doctors found after filtering');
+        _errorMessage.value =
+            'No approved doctors found. Try using "Fetch All Doctors" to see all doctors regardless of verification status.';
+
+        // Try to fix any doctors with incorrect case in verification_status
+        for (var doctor in allDoctors) {
+          if (doctor['verification_status'] != null &&
+              doctor['verification_status'].toString().toLowerCase() ==
+                  'approved' &&
+              doctor['verification_status'].toString() != 'approved') {
+            debugPrint(
+              'Found doctor with incorrect case: ${doctor['id']}, Status: ${doctor['verification_status']}',
+            );
+            // Try to fix the status
+            try {
+              await _supabaseService.updateDoctorVerificationStatus(
+                doctor['id'],
+                'approved',
+              );
+              debugPrint(
+                'Fixed verification status for doctor: ${doctor['id']}',
+              );
+            } catch (e) {
+              debugPrint('Error fixing verification status: $e');
+            }
+          }
+        }
+        _isLoading.value = false;
         return;
       }
 
-      final ids = doctorIds.map((item) => item['id']).toList();
-      debugPrint('Found ${ids.length} approved doctors');
+      debugPrint('Found ${doctorIds.length} approved doctors: $doctorIds');
 
-      // Get user data for approved doctors
-      final users = await _supabaseService.supabaseClient
+      // First, check if these doctor IDs exist in the users table
+      // This is to verify data integrity between doctors and users tables
+      final allUsers = await _supabaseService.supabaseClient
           .from('users')
-          .select()
-          .eq('user_type', 'doctor')
-          .filter('id', 'in', ids);
+          .select('id, user_type')
+          .filter('id', 'in', doctorIds);
+
+      debugPrint('Checking user records for approved doctors...');
+      debugPrint('Found ${allUsers.length} total user records for doctor IDs');
+
+      // Log each user record found
+      for (var user in allUsers) {
+        debugPrint('User ID: ${user['id']}, User Type: ${user['user_type']}');
+      }
+
+      // Filter to only include users with user_type = 'doctor'
+      final users = allUsers.where((u) => u['user_type'] == 'doctor').toList();
+      debugPrint(
+        'Found ${users.length} doctor user records (with user_type = doctor)',
+      );
+
+      // With our database triggers and constraints, we should no longer have integrity issues
+      // But we'll still check and log any issues for monitoring purposes
+      if (users.isEmpty) {
+        debugPrint('==== WARNING ====');
+        debugPrint(
+          'No user records found for approved doctors, attempting to continue anyway',
+        );
+        debugPrint(
+          'This should not happen with the database triggers in place',
+        );
+        debugPrint(
+          'Found ${doctorIds.length} approved doctors but 0 corresponding user records',
+        );
+        debugPrint('Doctor IDs: $doctorIds');
+        debugPrint('===============');
+
+        // Instead of just retrying, let's try to fix the issue by creating user records
+        debugPrint(
+          'Attempting to fix data integrity issue by creating missing user records...',
+        );
+
+        List<Map<String, dynamic>> createdUsers = [];
+
+        for (final doctorId in doctorIds) {
+          try {
+            // Get doctor data
+            final doctorData =
+                await _supabaseService.supabaseClient
+                    .from('doctors_profile')
+                    .select()
+                    .eq('id', doctorId)
+                    .single();
+
+            // Try to create a user record using the RPC function that bypasses RLS
+            try {
+              await _supabaseService.supabaseClient.rpc(
+                'create_missing_user_record',
+                params: {
+                  'doctor_id': doctorId,
+                  'doctor_email':
+                      'doctor_${doctorId.toString().substring(0, 8)}@example.com',
+                },
+              );
+              debugPrint('Created user record using RPC function');
+            } catch (rpcError) {
+              debugPrint(
+                'RPC error: $rpcError, trying direct insert as fallback',
+              );
+
+              // Fallback to direct insert (might fail due to RLS)
+              try {
+                // Create a better doctor name using specialization, hospital, and city
+                String doctorName = '';
+                final specialization = doctorData['specialization'];
+                final hospital = doctorData['hospital'];
+                final city = doctorData['city'];
+
+                if (specialization != null &&
+                    specialization.toString().isNotEmpty) {
+                  doctorName = 'Dr. $specialization';
+
+                  // Add hospital if available
+                  if (hospital != null && hospital.toString().isNotEmpty) {
+                    doctorName += ' ($hospital';
+
+                    // Add city if available
+                    if (city != null && city.toString().isNotEmpty) {
+                      doctorName += ', $city)';
+                    } else {
+                      doctorName += ')';
+                    }
+                  }
+                  // Add city directly if no hospital
+                  else if (city != null && city.toString().isNotEmpty) {
+                    doctorName += ' ($city)';
+                  }
+                } else {
+                  // Fallback if no specialization
+                  if (hospital != null && hospital.toString().isNotEmpty) {
+                    doctorName = 'Dr. $hospital';
+                  } else if (city != null && city.toString().isNotEmpty) {
+                    doctorName = 'Dr. $city';
+                  } else {
+                    doctorName = 'Dr. Unknown';
+                  }
+                }
+
+                await _supabaseService.supabaseClient.from('users').insert({
+                  'id': doctorId,
+                  'name': doctorName,
+                  'email':
+                      'doctor_${doctorId.toString().substring(0, 8)}@example.com',
+                  'user_type': 'doctor',
+                  'created_at': DateTime.now().toIso8601String(),
+                  'updated_at': DateTime.now().toIso8601String(),
+                });
+              } catch (insertError) {
+                debugPrint('Direct insert also failed: $insertError');
+
+                // As a last resort, try to fix all integrity issues at once using a server function
+                try {
+                  final result = await _supabaseService.supabaseClient.rpc(
+                    'fix_all_doctor_user_integrity',
+                  );
+                  debugPrint('Attempted to fix all integrity issues: $result');
+                } catch (fixError) {
+                  debugPrint('Failed to fix integrity issues: $fixError');
+                  rethrow; // Re-throw to be caught by the outer catch block
+                }
+              }
+            }
+
+            // Create a better doctor name using specialization, hospital, and city
+            String doctorName = '';
+            final specialization = doctorData['specialization'];
+            final hospital = doctorData['hospital'];
+            final city = doctorData['city'];
+
+            if (specialization != null &&
+                specialization.toString().isNotEmpty) {
+              doctorName = 'Dr. $specialization';
+
+              // Add hospital if available
+              if (hospital != null && hospital.toString().isNotEmpty) {
+                doctorName += ' ($hospital';
+
+                // Add city if available
+                if (city != null && city.toString().isNotEmpty) {
+                  doctorName += ', $city)';
+                } else {
+                  doctorName += ')';
+                }
+              }
+              // Add city directly if no hospital
+              else if (city != null && city.toString().isNotEmpty) {
+                doctorName += ' ($city)';
+              }
+            } else {
+              // Fallback if no specialization
+              if (hospital != null && hospital.toString().isNotEmpty) {
+                doctorName = 'Dr. $hospital';
+              } else if (city != null && city.toString().isNotEmpty) {
+                doctorName = 'Dr. $city';
+              } else {
+                doctorName = 'Dr. Unknown';
+              }
+            }
+
+            // Add to our list of created users
+            createdUsers.add({
+              'id': doctorId,
+              'name': doctorName,
+              'user_type': 'doctor',
+              'profile_image': null,
+            });
+
+            debugPrint('Created user record for doctor ID: $doctorId');
+          } catch (e) {
+            debugPrint(
+              'Error creating user record for doctor ID $doctorId: $e',
+            );
+          }
+        }
+
+        if (createdUsers.isNotEmpty) {
+          debugPrint('==== RECOVERY ====');
+          debugPrint('Created ${createdUsers.length} user records for doctors');
+          debugPrint('=================');
+          users.clear();
+          users.addAll(createdUsers);
+        } else {
+          // If we couldn't create any user records, try one more time to get existing ones
+          await Future.delayed(const Duration(milliseconds: 500));
+
+          final retryUsers = await _supabaseService.supabaseClient
+              .from('users')
+              .select('id, user_type, name, profile_image')
+              .filter('id', 'in', doctorIds);
+
+          if (retryUsers.isNotEmpty) {
+            debugPrint('==== RECOVERY ====');
+            debugPrint('Found ${retryUsers.length} user records after retry');
+            debugPrint('=================');
+            users.clear();
+            users.addAll(retryUsers);
+          } else {
+            _errorMessage.value =
+                'No doctor records found. Please try again later.';
+            _isLoading.value = false;
+            return;
+          }
+        }
+      }
+
+      if (users.length < doctorIds.length) {
+        // Some doctors don't have corresponding user records
+        final foundIds = users.map((u) => u['id']).toList();
+        final missingIds =
+            doctorIds.where((id) => !foundIds.contains(id)).toList();
+
+        debugPrint('==== WARNING ====');
+        debugPrint(
+          'Some doctors are missing user records, but continuing with available data',
+        );
+        debugPrint(
+          'Found ${users.length} user records out of ${doctorIds.length} approved doctors',
+        );
+        debugPrint('Missing user records for doctor IDs: $missingIds');
+        debugPrint('=================');
+      }
 
       List<DoctorModel> doctorsList = [];
 
       for (final userData in users) {
         try {
-          // Get doctor data
+          // Get doctor data from the new profile table
           final doctorData =
               await _supabaseService.supabaseClient
-                  .from('doctors')
+                  .from('doctors_profile')
                   .select()
                   .eq('id', userData['id'])
                   .single();
@@ -91,8 +374,8 @@ class DoctorController extends GetxController {
           // Create doctor model
           final doctor = DoctorModel(
             id: userData['id'],
-            name: userData['name'],
-            specialization: doctorData['specialization'],
+            name: userData['name'] ?? 'Unknown Doctor',
+            specialization: doctorData['specialization'] ?? 'General',
             hospital: doctorData['hospital'] ?? '',
             city: doctorData['city'] ?? '',
             profileImage: userData['profile_image'] ?? '',
@@ -117,13 +400,26 @@ class DoctorController extends GetxController {
           );
 
           doctorsList.add(doctor);
+          debugPrint(
+            'Successfully created doctor model for: ${doctor.name} (${doctor.id})',
+          );
         } catch (e) {
           debugPrint('Error getting doctor data: $e');
         }
       }
 
-      _doctors.assignAll(doctorsList);
+      if (doctorsList.isEmpty && users.isNotEmpty) {
+        debugPrint(
+          'Failed to create any doctor models despite finding user records',
+        );
+        _errorMessage.value =
+            'Failed to load doctor details. Please try "Fetch All Doctors" instead.';
+      } else {
+        debugPrint('Successfully loaded ${doctorsList.length} doctors');
+        _doctors.assignAll(doctorsList);
+      }
     } catch (e) {
+      debugPrint('Exception in getAllDoctors: ${e.toString()}');
       _errorMessage.value = 'Failed to get doctors: ${e.toString()}';
 
       // Fallback to mock data
@@ -149,13 +445,28 @@ class DoctorController extends GetxController {
     try {
       // Try to get doctors from Supabase
       // Only get approved doctors with the specified specialization
+      // Use ilike for case-insensitive matching of verification_status
       final doctorIds = await _supabaseService.supabaseClient
-          .from('doctors')
-          .select('id')
+          .from('doctors_profile')
+          .select('id, verification_status')
           .eq('specialization', specialization)
-          .eq('verification_status', 'approved');
+          .or(
+            'verification_status.ilike.approved,verification_status.eq.Approved,verification_status.eq.APPROVED',
+          );
 
-      if (doctorIds.isEmpty) {
+      // Filter to only include doctors with approved status (case insensitive)
+      final approvedDoctorIds =
+          doctorIds
+              .where(
+                (d) =>
+                    d['verification_status'] != null &&
+                    d['verification_status'].toString().toLowerCase() ==
+                        'approved',
+              )
+              .map((d) => d['id'])
+              .toList();
+
+      if (approvedDoctorIds.isEmpty) {
         _doctors.clear();
         debugPrint(
           'No approved doctors found with specialization: $specialization',
@@ -163,7 +474,7 @@ class DoctorController extends GetxController {
         return;
       }
 
-      final ids = doctorIds.map((item) => item['id']).toList();
+      final ids = approvedDoctorIds;
       debugPrint(
         'Found ${ids.length} approved doctors with specialization: $specialization',
       );
@@ -174,14 +485,67 @@ class DoctorController extends GetxController {
           .select()
           .filter('id', 'in', ids);
 
+      // Check if we found all the user records
+      if (users.isEmpty) {
+        debugPrint('==== WARNING ====');
+        debugPrint(
+          'No user records found for approved doctors with specialization: $specialization',
+        );
+        debugPrint(
+          'This should not happen with the database triggers in place',
+        );
+        debugPrint(
+          'Found ${ids.length} approved doctors but 0 corresponding user records',
+        );
+        debugPrint('Doctor IDs: $ids');
+        debugPrint('===============');
+
+        // Try to get the user records again after a short delay
+        await Future.delayed(const Duration(milliseconds: 500));
+
+        final retryUsers = await _supabaseService.supabaseClient
+            .from('users')
+            .select('id, user_type, name, profile_image')
+            .filter('id', 'in', ids);
+
+        if (retryUsers.isNotEmpty) {
+          debugPrint('==== RECOVERY ====');
+          debugPrint('Found ${retryUsers.length} user records after retry');
+          debugPrint('=================');
+          users.clear();
+          users.addAll(retryUsers);
+        } else {
+          _errorMessage.value =
+              'No doctors found with specialization: $specialization';
+          _isLoading.value = false;
+          return;
+        }
+      }
+
+      if (users.length < ids.length) {
+        // Some doctors don't have corresponding user records
+        final foundIds = users.map((u) => u['id']).toList();
+        final missingIds = ids.where((id) => !foundIds.contains(id)).toList();
+
+        debugPrint('==== WARNING ====');
+        debugPrint(
+          'Some doctors are missing user records, but continuing with available data',
+        );
+        debugPrint(
+          'Found ${users.length} user records out of ${ids.length} approved doctors',
+        );
+        debugPrint('Missing user records for doctor IDs: $missingIds');
+        debugPrint('=================');
+      }
+
       List<DoctorModel> doctorsList = [];
 
       for (final userData in users) {
         try {
-          // Get doctor data
+          // Get doctor data from the new profile table
           final doctorData =
               await _supabaseService.supabaseClient
-                  .from('doctors')
+                  .from('doctors_profile')
                   .select()
                   .eq('id', userData['id'])
                   .single();
@@ -268,21 +632,97 @@ class DoctorController extends GetxController {
     _errorMessage.value = '';
 
     try {
-      // Get user data
-      final userData =
+      // Get doctor data first to ensure it exists (using new data model)
+      final doctorData =
           await _supabaseService.supabaseClient
-              .from('users')
+              .from('doctors_profile')
               .select()
               .eq('id', id)
               .single();
 
-      // Get doctor data
-      final doctorData =
-          await _supabaseService.supabaseClient
-              .from('doctors')
-              .select()
-              .eq('id', id)
-              .single();
+      // With our database triggers, this should automatically create a user record if missing
+
+      // Get user data
+      Map<String, dynamic> userData;
+      try {
+        userData =
+            await _supabaseService.supabaseClient
+                .from('users')
+                .select()
+                .eq('id', id)
+                .single();
+      } catch (e) {
+        debugPrint('==== WARNING ====');
+        debugPrint('User record not found for doctor ID: $id');
+        debugPrint(
+          'This should not happen with the database triggers in place',
+        );
+        debugPrint('Error: $e');
+        debugPrint('===============');
+
+        // Try to get the user record again after a short delay
+        await Future.delayed(const Duration(milliseconds: 500));
+
+        try {
+          userData =
+              await _supabaseService.supabaseClient
+                  .from('users')
+                  .select()
+                  .eq('id', id)
+                  .single();
+
+          debugPrint('==== RECOVERY ====');
+          debugPrint('Found user record after retry');
+          debugPrint('=================');
+        } catch (retryError) {
+          // Create a default user data object
+          debugPrint('==== FALLBACK ====');
+          debugPrint('Creating default user data for doctor ID: $id');
+          debugPrint('=================');
+
+          // Create a better doctor name using specialization, hospital, and city
+          String doctorName = '';
+          final specialization = doctorData['specialization'];
+          final hospital = doctorData['hospital'];
+          final city = doctorData['city'];
+
+          if (specialization != null && specialization.toString().isNotEmpty) {
+            doctorName = 'Dr. $specialization';
+
+            // Add hospital if available
+            if (hospital != null && hospital.toString().isNotEmpty) {
+              doctorName += ' ($hospital';
+
+              // Add city if available
+              if (city != null && city.toString().isNotEmpty) {
+                doctorName += ', $city)';
+              } else {
+                doctorName += ')';
+              }
+            }
+            // Add city directly if no hospital
+            else if (city != null && city.toString().isNotEmpty) {
+              doctorName += ' ($city)';
+            }
+          } else {
+            // Fallback if no specialization
+            if (hospital != null && hospital.toString().isNotEmpty) {
+              doctorName = 'Dr. $hospital';
+            } else if (city != null && city.toString().isNotEmpty) {
+              doctorName = 'Dr. $city';
+            } else {
+              doctorName = 'Dr. Unknown';
+            }
+          }
+
+          userData = {
+            'id': id,
+            'name': doctorName,
+            'profile_image': '',
+            'user_type': 'doctor',
+          };
+        }
+      }
 
       // Get qualifications
       final qualifications = await _supabaseService.getDoctorQualifications(id);
@@ -353,6 +793,403 @@ class DoctorController extends GetxController {
   // Clear selected doctor
   void clearSelectedDoctor() {
     _selectedDoctor.value = null;
+  }
+
+  // Force refresh doctors list
+  Future<void> refreshDoctors() async {
+    debugPrint('Forcing refresh of doctors list');
+    _doctors.clear();
+    _errorMessage.value = '';
+    await getAllDoctors();
+
+    // Log the results after refresh
+    if (_doctors.isEmpty) {
+      debugPrint('After refresh: No doctors found');
+    } else {
+      debugPrint('After refresh: Found ${_doctors.length} doctors');
+      for (var doctor in _doctors) {
+        debugPrint(
+          'Doctor: ${doctor.name}, ID: ${doctor.id}, Status: ${doctor.verificationStatus}',
+        );
+      }
+    }
+  }
+
+  // Get all doctors regardless of verification status
+  Future<void> getAllDoctorsRegardlessOfStatus() async {
+    _isLoading.value = true;
+    _errorMessage.value = '';
+
+    try {
+      // Always clear the doctors list to ensure fresh data
+      _doctors.clear();
+
+      debugPrint('Fetching ALL doctors from Supabase regardless of status...');
+
+      // Get all doctors from the database (using new data model)
+      final allDoctors = await _supabaseService.supabaseClient
+          .from('doctors_profile')
+          .select('id, verification_status');
+
+      if (allDoctors.isEmpty) {
+        debugPrint('No doctors found in the database');
+        _errorMessage.value = 'No doctors found in the database';
+        _isLoading.value = false;
+        return;
+      }
+
+      // Log all verification statuses to debug
+      final statuses =
+          allDoctors.map((d) => d['verification_status']).toSet().toList();
+      debugPrint('Verification statuses in database: $statuses');
+
+      // Log each doctor's ID and verification status for debugging
+      for (var doctor in allDoctors) {
+        debugPrint(
+          'Doctor ID: ${doctor['id']}, Status: ${doctor['verification_status'] ?? 'null'}',
+        );
+      }
+
+      final doctorIds = allDoctors.map((d) => d['id']).toList();
+      debugPrint('Found ${doctorIds.length} total doctors: $doctorIds');
+
+      // First check if these doctor IDs exist in the users table at all
+      final allUsers = await _supabaseService.supabaseClient
+          .from('users')
+          .select('id, user_type')
+          .filter('id', 'in', doctorIds);
+
+      debugPrint(
+        'Found ${allUsers.length} total user records for all doctor IDs',
+      );
+
+      // Check for missing user records
+      if (allUsers.isEmpty) {
+        final errorMsg =
+            'DATA INTEGRITY ISSUE: No user records found for any doctors';
+        debugPrint('==== ERROR ====');
+        debugPrint(errorMsg);
+        debugPrint(
+          'Found ${doctorIds.length} total doctors but 0 corresponding user records',
+        );
+        debugPrint('Doctor IDs: $doctorIds');
+        debugPrint('===============');
+
+        // Instead of just returning an error, let's try to fix the issue by creating user records
+        debugPrint(
+          'Attempting to fix data integrity issue by creating missing user records...',
+        );
+
+        List<Map<String, dynamic>> createdUsers = [];
+
+        for (final doctorId in doctorIds) {
+          try {
+            // Get doctor data
+            final doctorData =
+                await _supabaseService.supabaseClient
+                    .from('doctors_profile')
+                    .select()
+                    .eq('id', doctorId)
+                    .single();
+
+            // Try to create a user record using the RPC function that bypasses RLS
+            try {
+              await _supabaseService.supabaseClient.rpc(
+                'create_missing_user_record',
+                params: {
+                  'doctor_id': doctorId,
+                  'doctor_email':
+                      'doctor_${doctorId.toString().substring(0, 8)}@example.com',
+                },
+              );
+              debugPrint('Created user record using RPC function');
+            } catch (rpcError) {
+              debugPrint(
+                'RPC error: $rpcError, trying direct insert as fallback',
+              );
+
+              // Fallback to direct insert (might fail due to RLS)
+              try {
+                // Create a better doctor name using specialization, hospital, and city
+                String doctorName = '';
+                final specialization = doctorData['specialization'];
+                final hospital = doctorData['hospital'];
+                final city = doctorData['city'];
+
+                if (specialization != null &&
+                    specialization.toString().isNotEmpty) {
+                  doctorName = 'Dr. $specialization';
+
+                  // Add hospital if available
+                  if (hospital != null && hospital.toString().isNotEmpty) {
+                    doctorName += ' ($hospital';
+
+                    // Add city if available
+                    if (city != null && city.toString().isNotEmpty) {
+                      doctorName += ', $city)';
+                    } else {
+                      doctorName += ')';
+                    }
+                  }
+                  // Add city directly if no hospital
+                  else if (city != null && city.toString().isNotEmpty) {
+                    doctorName += ' ($city)';
+                  }
+                } else {
+                  // Fallback if no specialization
+                  if (hospital != null && hospital.toString().isNotEmpty) {
+                    doctorName = 'Dr. $hospital';
+                  } else if (city != null && city.toString().isNotEmpty) {
+                    doctorName = 'Dr. $city';
+                  } else {
+                    doctorName = 'Dr. Unknown';
+                  }
+                }
+
+                await _supabaseService.supabaseClient.from('users').insert({
+                  'id': doctorId,
+                  'name': doctorName,
+                  'email':
+                      'doctor_${doctorId.toString().substring(0, 8)}@example.com',
+                  'user_type': 'doctor',
+                  'created_at': DateTime.now().toIso8601String(),
+                  'updated_at': DateTime.now().toIso8601String(),
+                });
+              } catch (insertError) {
+                debugPrint('Direct insert also failed: $insertError');
+
+                // As a last resort, try to fix all integrity issues at once using a server function
+                try {
+                  final result = await _supabaseService.supabaseClient.rpc(
+                    'fix_all_doctor_user_integrity',
+                  );
+                  debugPrint('Attempted to fix all integrity issues: $result');
+                } catch (fixError) {
+                  debugPrint('Failed to fix integrity issues: $fixError');
+                  rethrow; // Re-throw to be caught by the outer catch block
+                }
+              }
+            }
+
+            // Create a better doctor name using specialization, hospital, and city
+            String doctorName = '';
+            final specialization = doctorData['specialization'];
+            final hospital = doctorData['hospital'];
+            final city = doctorData['city'];
+
+            if (specialization != null &&
+                specialization.toString().isNotEmpty) {
+              doctorName = 'Dr. $specialization';
+
+              // Add hospital if available
+              if (hospital != null && hospital.toString().isNotEmpty) {
+                doctorName += ' ($hospital';
+
+                // Add city if available
+                if (city != null && city.toString().isNotEmpty) {
+                  doctorName += ', $city)';
+                } else {
+                  doctorName += ')';
+                }
+              }
+              // Add city directly if no hospital
+              else if (city != null && city.toString().isNotEmpty) {
+                doctorName += ' ($city)';
+              }
+            } else {
+              // Fallback if no specialization
+              if (hospital != null && hospital.toString().isNotEmpty) {
+                doctorName = 'Dr. $hospital';
+              } else if (city != null && city.toString().isNotEmpty) {
+                doctorName = 'Dr. $city';
+              } else {
+                doctorName = 'Dr. Unknown';
+              }
+            }
+
+            // Add to our list of created users
+            createdUsers.add({
+              'id': doctorId,
+              'name': doctorName,
+              'user_type': 'doctor',
+            });
+
+            debugPrint('Created user record for doctor ID: $doctorId');
+          } catch (e) {
+            debugPrint(
+              'Error creating user record for doctor ID $doctorId: $e',
+            );
+          }
+        }
+
+        if (createdUsers.isEmpty) {
+          // If we couldn't create any user records, return with an error
+          _errorMessage.value =
+              'Data integrity issue: Could not create missing user records for doctors. Please check database consistency.';
+          _isLoading.value = false;
+          return;
+        }
+
+        // Use the created users instead of the empty allUsers
+        debugPrint('Created ${createdUsers.length} user records for doctors');
+        allUsers.clear();
+        allUsers.addAll(createdUsers);
+      }
+
+      if (allUsers.length < doctorIds.length) {
+        // Some doctors don't have corresponding user records
+        final foundIds = allUsers.map((u) => u['id']).toList();
+        final missingIds =
+            doctorIds.where((id) => !foundIds.contains(id)).toList();
+
+        debugPrint('==== WARNING ====');
+        debugPrint(
+          'PARTIAL DATA INTEGRITY ISSUE: Some doctors are missing user records',
+        );
+        debugPrint(
+          'Found ${allUsers.length} user records out of ${doctorIds.length} total doctors',
+        );
+        debugPrint('Missing user records for doctor IDs: $missingIds');
+        debugPrint(
+          'This indicates a data integrity issue between doctors and users tables',
+        );
+        debugPrint('=================');
+      }
+
+      // Filter to only include users with user_type = 'doctor'
+      final users = allUsers.where((u) => u['user_type'] == 'doctor').toList();
+      debugPrint(
+        'Found ${users.length} doctor user records (with user_type = doctor)',
+      );
+
+      if (users.isEmpty) {
+        final errorMsg =
+            'DATA INTEGRITY ISSUE: Found user records but none with user_type = doctor';
+        debugPrint('==== ERROR ====');
+        debugPrint(errorMsg);
+        debugPrint(
+          'Found ${allUsers.length} user records but none have user_type = doctor',
+        );
+        debugPrint('User IDs: ${allUsers.map((u) => u['id']).toList()}');
+        debugPrint(
+          'User types: ${allUsers.map((u) => u['user_type']).toList()}',
+        );
+        debugPrint('===============');
+        _errorMessage.value =
+            'Data integrity issue: Found user records for doctors but none have user_type = doctor. Please check database consistency.';
+        _isLoading.value = false;
+        return;
+      }
+
+      List<DoctorModel> doctorsList = [];
+
+      for (final userData in users) {
+        try {
+          // Get doctor data from the new profile table
+          final doctorData =
+              await _supabaseService.supabaseClient
+                  .from('doctors_profile')
+                  .select()
+                  .eq('id', userData['id'])
+                  .single();
+
+          // Get qualifications
+          final qualifications = await _supabaseService.getDoctorQualifications(
+            userData['id'],
+          );
+
+          // Get languages
+          final languages = await _supabaseService.getDoctorLanguages(
+            userData['id'],
+          );
+
+          // Get available days and time slots
+          final availableDays = await _supabaseService.getDoctorAvailableDays(
+            userData['id'],
+          );
+          Map<String, List<String>> availableTimeSlots = {};
+
+          if (availableDays.isNotEmpty) {
+            availableTimeSlots = await _supabaseService.getAllDoctorTimeSlots(
+              userData['id'],
+            );
+          }
+
+          // Create doctor model
+          final doctor = DoctorModel(
+            id: userData['id'],
+            name: userData['name'] ?? 'Unknown Doctor',
+            specialization: doctorData['specialization'] ?? 'General',
+            hospital: doctorData['hospital'] ?? '',
+            city: doctorData['city'] ?? '',
+            profileImage: userData['profile_image'] ?? '',
+            rating: doctorData['rating']?.toDouble() ?? 0.0,
+            experience: doctorData['experience'] ?? 0,
+            about: doctorData['about'],
+            languages: languages.isNotEmpty ? languages : null,
+            qualifications: qualifications.isNotEmpty ? qualifications : null,
+            availableDays: availableDays.isNotEmpty ? availableDays : null,
+            availableTimeSlots:
+                availableTimeSlots.isNotEmpty ? availableTimeSlots : null,
+            consultationFee: doctorData['consultation_fee']?.toDouble() ?? 0.0,
+            isAvailableForVideo: doctorData['is_available_for_video'] ?? false,
+            isAvailableForChat: doctorData['is_available_for_chat'] ?? false,
+            verificationStatus: doctorData['verification_status'] ?? 'pending',
+            rejectionReason: doctorData['rejection_reason'],
+            verificationDate:
+                doctorData['verification_date'] != null
+                    ? DateTime.parse(doctorData['verification_date'])
+                    : null,
+            verifiedBy: doctorData['verified_by'],
+          );
+
+          doctorsList.add(doctor);
+          debugPrint(
+            'Successfully created doctor model for: ${doctor.name} (${doctor.id})',
+          );
+        } catch (e) {
+          debugPrint('Error getting doctor data for ${userData['id']}: $e');
+        }
+      }
+
+      if (doctorsList.isEmpty && users.isNotEmpty) {
+        debugPrint(
+          'Failed to create any doctor models despite finding user records',
+        );
+        _errorMessage.value =
+            'Failed to load doctor details. Please check database consistency.';
+      } else {
+        debugPrint(
+          'Successfully loaded ${doctorsList.length} doctors with all statuses',
+        );
+        _doctors.assignAll(doctorsList);
+
+        // Log the results
+        for (var doctor in _doctors) {
+          debugPrint(
+            'Doctor: ${doctor.name}, ID: ${doctor.id}, Status: ${doctor.verificationStatus}',
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint(
+        'Exception in getAllDoctorsRegardlessOfStatus: ${e.toString()}',
+      );
+      _errorMessage.value = 'Failed to get all doctors: ${e.toString()}';
+
+      // Fallback to mock data
+      try {
+        final mockDoctorsList = await _mockDataService.getAllDoctors();
+        _doctors.assignAll(mockDoctorsList);
+        _errorMessage.value =
+            'Using mock data (Supabase error: ${e.toString()})';
+      } catch (mockError) {
+        _errorMessage.value =
+            'Failed to get all doctors: ${e.toString()}. Mock data error: ${mockError.toString()}';
+      }
+    } finally {
+      _isLoading.value = false;
+    }
   }
 
   // Update doctor profile

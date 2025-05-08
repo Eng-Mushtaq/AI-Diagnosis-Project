@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:get/get.dart';
 import '../models/user_model.dart';
+import '../controllers/auth_controller.dart';
 import 'supabase_service.dart';
 
 /// Service class for handling admin-specific operations
@@ -45,9 +46,9 @@ class AdminService extends GetxService {
           .eq('user_type', 'patient');
       final totalPatients = patients.length;
 
-      // Get pending approvals
+      // Get pending approvals from the new profile table
       final pendingApprovals = await _supabase
-          .from('doctors')
+          .from('doctors_profile')
           .select()
           .eq('verification_status', 'pending');
       final totalPendingApprovals = pendingApprovals.length;
@@ -85,20 +86,26 @@ class AdminService extends GetxService {
 
       // First try to get the user from the AuthController
       try {
-        // Use dynamic to avoid type issues
-        final authController = Get.find<dynamic>();
-        if (authController.isAdmin == true) {
+        // Try to find the AuthController properly
+        if (Get.isRegistered<AuthController>()) {
+          final authController = Get.find<AuthController>();
+          if (authController.isAdmin) {
+            debugPrint(
+              'isCurrentUserAdmin: User is admin according to AuthController',
+            );
+            return true;
+          }
           debugPrint(
-            'isCurrentUserAdmin: User is admin according to AuthController',
+            'isCurrentUserAdmin: User is not admin according to AuthController, checking database',
           );
-          return true;
+        } else {
+          debugPrint(
+            'isCurrentUserAdmin: AuthController not registered, checking database directly',
+          );
         }
-        debugPrint(
-          'isCurrentUserAdmin: User is not admin according to AuthController, checking database',
-        );
       } catch (e) {
         debugPrint(
-          'isCurrentUserAdmin: AuthController not found or error: $e, checking database directly',
+          'isCurrentUserAdmin: Error accessing AuthController: $e, checking database directly',
         );
       }
 
@@ -346,7 +353,7 @@ class AdminService extends GetxService {
             user.gender != null ||
             user.bloodGroup != null) {
           await _supabase
-              .from('patients')
+              .from('patients_profile')
               .update({
                 if (user.age != null) 'age': user.age,
                 if (user.gender != null) 'gender': user.gender,
@@ -360,7 +367,7 @@ class AdminService extends GetxService {
         // Update doctor-specific fields if needed
         if (user.specialization != null || user.hospital != null) {
           await _supabase
-              .from('doctors')
+              .from('doctors_profile')
               .update({
                 if (user.specialization != null)
                   'specialization': user.specialization,
@@ -379,7 +386,7 @@ class AdminService extends GetxService {
         // Update admin-specific fields
         if (user.adminRole != null) {
           await _supabase
-              .from('admins')
+              .from('admins_profile')
               .update({'admin_role': user.adminRole})
               .eq('id', user.id);
         }
@@ -412,13 +419,13 @@ class AdminService extends GetxService {
 
       final userType = userData['user_type'];
 
-      // Delete from specific type table
+      // Delete from specific profile table
       if (userType == 'patient') {
-        await _supabase.from('patients').delete().eq('id', userId);
+        await _supabase.from('patients_profile').delete().eq('id', userId);
       } else if (userType == 'doctor') {
-        await _supabase.from('doctors').delete().eq('id', userId);
+        await _supabase.from('doctors_profile').delete().eq('id', userId);
       } else if (userType == 'admin') {
-        await _supabase.from('admins').delete().eq('id', userId);
+        await _supabase.from('admins_profile').delete().eq('id', userId);
       }
 
       // Delete from users table

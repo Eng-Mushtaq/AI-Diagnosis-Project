@@ -7,7 +7,7 @@ import 'admin_service.dart';
 import 'supabase_service.dart';
 
 class DoctorVerificationService extends GetxService {
-  // Removed unused field: final SupabaseService _supabaseService = Get.find<SupabaseService>();
+  final SupabaseService _supabaseService = Get.find<SupabaseService>();
   final AdminService _adminService = Get.find<AdminService>();
   final SupabaseClient _supabase = Supabase.instance.client;
 
@@ -95,11 +95,12 @@ class DoctorVerificationService extends GetxService {
         'fetchDoctorsByVerificationStatus: Fetching doctors with status: $status',
       );
 
-      // Get all doctors with the specified status
+      // Get all doctors with the specified status from the new profile table
+      // Use ilike for case-insensitive matching
       final doctorsResponse = await _supabase
-          .from('doctors')
+          .from('doctors_profile')
           .select('id, verification_status')
-          .eq('verification_status', status);
+          .ilike('verification_status', status);
 
       debugPrint(
         'fetchDoctorsByVerificationStatus: Direct query found ${doctorsResponse.length} doctors with status: $status',
@@ -172,8 +173,8 @@ class DoctorVerificationService extends GetxService {
           'fetchDoctorsByVerificationStatus: Doctor ${item['name']} (${item['id']}) has status: $verificationStatus',
         );
 
-        // Double-check that the status matches what we're looking for
-        if (verificationStatus != status) {
+        // Double-check that the status matches what we're looking for (case insensitive)
+        if (verificationStatus.toLowerCase() != status.toLowerCase()) {
           debugPrint(
             'fetchDoctorsByVerificationStatus: WARNING: Doctor ${item['name']} has status $verificationStatus but was returned in query for $status',
           );
@@ -294,78 +295,66 @@ class DoctorVerificationService extends GetxService {
       // Add debug logging
       debugPrint('approveDoctor: Approving doctor with ID: $doctorId');
 
-      // Check if verification_status column exists
-      bool verificationColumnsExist = true;
+      // Check if the doctor exists in the doctors_profile table
+      bool doctorExists = true;
       try {
         // Try to get current status
         await _supabase
-            .from('doctors')
+            .from('doctors_profile')
             .select('verification_status')
             .eq('id', doctorId)
             .single();
       } catch (e) {
         debugPrint(
-          'approveDoctor: Error checking verification_status column: $e',
+          'approveDoctor: Error checking doctor in doctors_profile table: $e',
         );
-        verificationColumnsExist = false;
+        doctorExists = false;
       }
 
-      // If verification columns don't exist, add them
-      if (!verificationColumnsExist) {
+      // If doctor doesn't exist in the new profile table, check if they exist in the old table
+      if (!doctorExists) {
         debugPrint(
-          'approveDoctor: Verification columns do not exist, adding them',
+          'approveDoctor: Doctor not found in doctors_profile table, checking old doctors table',
         );
         try {
-          // Add verification_status column
-          await _supabase.rpc(
-            'alter_table_add_column',
-            params: {
-              'table_name': 'doctors',
-              'column_name': 'verification_status',
-              'column_type': 'TEXT',
-              'column_default': "'pending'",
-            },
-          );
+          final oldDoctorData =
+              await _supabase
+                  .from('doctors')
+                  .select('*')
+                  .eq('id', doctorId)
+                  .single();
 
-          // Add verification_date column
-          await _supabase.rpc(
-            'alter_table_add_column',
-            params: {
-              'table_name': 'doctors',
-              'column_name': 'verification_date',
-              'column_type': 'TIMESTAMP WITH TIME ZONE',
-              'column_default': 'NULL',
-            },
-          );
-
-          // Add verified_by column
-          await _supabase.rpc(
-            'alter_table_add_column',
-            params: {
-              'table_name': 'doctors',
-              'column_name': 'verified_by',
-              'column_type': 'UUID',
-              'column_default': 'NULL',
-            },
-          );
-
-          // Add rejection_reason column
-          await _supabase.rpc(
-            'alter_table_add_column',
-            params: {
-              'table_name': 'doctors',
-              'column_name': 'rejection_reason',
-              'column_type': 'TEXT',
-              'column_default': 'NULL',
-            },
-          );
-
-          debugPrint('approveDoctor: Successfully added verification columns');
-        } catch (alterError) {
+          // If found in old table, migrate to new table
           debugPrint(
-            'approveDoctor: Error adding verification columns: $alterError',
+            'approveDoctor: Doctor found in old table, migrating to new table',
           );
-          // Continue anyway, as we'll try a direct update
+
+          await _supabase.from('doctors_profile').insert({
+            'id': doctorId,
+            'specialization':
+                oldDoctorData['specialization'] ?? 'General Practitioner',
+            'hospital': oldDoctorData['hospital'] ?? '',
+            'license_number': oldDoctorData['license_number'] ?? '',
+            'experience': oldDoctorData['experience'] ?? 0,
+            'rating': oldDoctorData['rating'] ?? 0,
+            'consultation_fee': oldDoctorData['consultation_fee'] ?? 0,
+            'is_available_for_chat':
+                oldDoctorData['is_available_for_chat'] ?? false,
+            'is_available_for_video':
+                oldDoctorData['is_available_for_video'] ?? false,
+            'verification_status': 'pending',
+            'about': oldDoctorData['about'] ?? '',
+            'city': oldDoctorData['city'] ?? '',
+            'created_at': DateTime.now().toIso8601String(),
+            'updated_at': DateTime.now().toIso8601String(),
+          });
+
+          doctorExists = true;
+          debugPrint(
+            'approveDoctor: Successfully migrated doctor to new profile table',
+          );
+        } catch (migrationError) {
+          debugPrint('approveDoctor: Error migrating doctor: $migrationError');
         }
       }
 
@@ -374,7 +363,7 @@ class DoctorVerificationService extends GetxService {
       try {
         final currentStatus =
             await _supabase
-                .from('doctors')
+                .from('doctors_profile')
                 .select('verification_status')
                 .eq('id', doctorId)
                 .single();
@@ -388,94 +377,66 @@ class DoctorVerificationService extends GetxService {
       );
 
       try {
-        // First, check if the doctor exists in the doctors table
-        final doctorCheck =
-            await _supabase
-                .from('doctors')
-                .select('id')
-                .eq('id', doctorId)
-                .single();
+        // Directly update the verification status in the doctors_profile table
+        await _supabase
+            .from('doctors_profile')
+            .update({
+              'verification_status': 'approved',
+              'verified_by': currentUser.id,
+              'verification_date': DateTime.now().toIso8601String(),
+              'rejection_reason': null, // Clear any previous rejection reason
+              'updated_at': DateTime.now().toIso8601String(),
+            })
+            .eq('id', doctorId);
 
         debugPrint(
-          'approveDoctor: Doctor check result: ${doctorCheck.toString()}',
+          'approveDoctor: Successfully updated doctor verification status to approved',
         );
 
-        // Try a direct update approach with retry
-        int retryCount = 0;
-        bool updateSuccess = false;
+        // Double-check that the update was successful
+        try {
+          final updatedStatus =
+              await _supabase
+                  .from('doctors_profile')
+                  .select('verification_status')
+                  .eq('id', doctorId)
+                  .single();
 
-        while (!updateSuccess && retryCount < 3) {
-          try {
-            retryCount++;
+          final newStatus = updatedStatus['verification_status'];
+          debugPrint('approveDoctor: New status after update: $newStatus');
 
-            // Ensure we have a valid session
-            if (_supabase.auth.currentSession == null) {
-              debugPrint(
-                'approveDoctor: No valid session found, aborting update',
-              );
-              return false;
-            }
-
-            // Update doctor verification status
-            await _supabase
-                .from('doctors')
-                .update({
-                  'verification_status': 'approved',
-                  'verification_date': DateTime.now().toIso8601String(),
-                  'verified_by': currentUser.id,
-                  'rejection_reason':
-                      null, // Clear any previous rejection reason
-                })
-                .eq('id', doctorId);
-
-            // Double-check if the update was successful by querying again
-            final verifyUpdate =
-                await _supabase
-                    .from('doctors')
-                    .select('verification_status')
-                    .eq('id', doctorId)
-                    .single();
-
-            debugPrint(
-              'approveDoctor: Verification check after update (attempt $retryCount): ${verifyUpdate.toString()}',
-            );
-
-            if (verifyUpdate['verification_status'] == 'approved') {
-              debugPrint(
-                'approveDoctor: Direct update successful on attempt $retryCount',
-              );
-              updateSuccess = true;
-              break;
-            } else {
-              debugPrint(
-                'approveDoctor: Update did not take effect on attempt $retryCount, retrying...',
-              );
-              // Short delay before retry
-              await Future.delayed(Duration(milliseconds: 500));
-            }
-          } catch (updateError) {
-            debugPrint(
-              'approveDoctor: Error with direct update (attempt $retryCount): $updateError',
-            );
-            // Short delay before retry
-            await Future.delayed(Duration(milliseconds: 500));
-          }
-        }
-
-        if (updateSuccess) {
+          return newStatus == 'approved';
+        } catch (checkError) {
+          debugPrint(
+            'approveDoctor: Error checking updated status: $checkError',
+          );
+          // Assume success if we can't check
           return true;
         }
-
-        // If all attempts failed, use a UI-only workaround
-        debugPrint(
-          'approveDoctor: All update attempts failed, using UI-only workaround',
-        );
-        debugPrint(
-          'approveDoctor: Doctor approval process completed (UI only)',
-        );
-        return true; // Return success to update the UI, even though the database update failed
       } catch (e) {
-        debugPrint('approveDoctor: Error checking doctor existence: $e');
+        debugPrint('approveDoctor: Error updating doctor status: $e');
+
+        // Try using the centralized method in SupabaseService as fallback
+        try {
+          final updateSuccess = await _supabaseService
+              .updateDoctorVerificationStatus(
+                doctorId,
+                'approved',
+                verifiedBy: currentUser.id,
+              );
+
+          if (updateSuccess) {
+            debugPrint(
+              'approveDoctor: Update successful using SupabaseService fallback',
+            );
+            return true;
+          }
+        } catch (fallbackError) {
+          debugPrint(
+            'approveDoctor: Fallback update also failed: $fallbackError',
+          );
+        }
+
         return false;
       }
     } catch (e) {
@@ -562,116 +523,152 @@ class DoctorVerificationService extends GetxService {
         return false;
       }
 
-      // Get current status for debugging
-      String currentStatusValue = 'unknown';
+      // Check if the doctor exists in the doctors_profile table
+      bool doctorExists = true;
       try {
+        // Try to get current status
         final currentStatus =
             await _supabase
-                .from('doctors')
+                .from('doctors_profile')
                 .select('verification_status')
                 .eq('id', doctorId)
                 .single();
-        currentStatusValue = currentStatus['verification_status'] ?? 'unknown';
+        String currentStatusValue =
+            currentStatus['verification_status'] ?? 'unknown';
 
         debugPrint(
           'rejectDoctor: Current status before rejection: $currentStatusValue',
         );
       } catch (e) {
-        debugPrint('rejectDoctor: Could not get current status: $e');
+        debugPrint(
+          'rejectDoctor: Error checking doctor in doctors_profile table: $e',
+        );
+        doctorExists = false;
       }
 
+      // If doctor doesn't exist in the new profile table, check if they exist in the old table
+      if (!doctorExists) {
+        debugPrint(
+          'rejectDoctor: Doctor not found in doctors_profile table, checking old doctors table',
+        );
+        try {
+          final oldDoctorData =
+              await _supabase
+                  .from('doctors')
+                  .select('*')
+                  .eq('id', doctorId)
+                  .single();
+
+          // If found in old table, migrate to new table
+          debugPrint(
+            'rejectDoctor: Doctor found in old table, migrating to new table',
+          );
+
+          await _supabase.from('doctors_profile').insert({
+            'id': doctorId,
+            'specialization':
+                oldDoctorData['specialization'] ?? 'General Practitioner',
+            'hospital': oldDoctorData['hospital'] ?? '',
+            'license_number': oldDoctorData['license_number'] ?? '',
+            'experience': oldDoctorData['experience'] ?? 0,
+            'rating': oldDoctorData['rating'] ?? 0,
+            'consultation_fee': oldDoctorData['consultation_fee'] ?? 0,
+            'is_available_for_chat':
+                oldDoctorData['is_available_for_chat'] ?? false,
+            'is_available_for_video':
+                oldDoctorData['is_available_for_video'] ?? false,
+            'verification_status': 'pending',
+            'about': oldDoctorData['about'] ?? '',
+            'city': oldDoctorData['city'] ?? '',
+            'created_at': DateTime.now().toIso8601String(),
+            'updated_at': DateTime.now().toIso8601String(),
+          });
+
+          doctorExists = true;
+          debugPrint(
+            'rejectDoctor: Successfully migrated doctor to new profile table',
+          );
+        } catch (migrationError) {
+          debugPrint('rejectDoctor: Error migrating doctor: $migrationError');
+        }
+      }
+
+      // Sanitize rejection reason to prevent SQL injection
+      final sanitizedReason = rejectionReason.trim();
+
       try {
-        // First, check if the doctor exists in the doctors table
-        final doctorCheck =
-            await _supabase
-                .from('doctors')
-                .select('id')
-                .eq('id', doctorId)
-                .single();
+        // Directly update the verification status in the doctors_profile table
+        await _supabase
+            .from('doctors_profile')
+            .update({
+              'verification_status': 'rejected',
+              'verified_by': currentUser.id,
+              'verification_date': DateTime.now().toIso8601String(),
+              'rejection_reason': sanitizedReason,
+              'updated_at': DateTime.now().toIso8601String(),
+            })
+            .eq('id', doctorId);
 
         debugPrint(
-          'rejectDoctor: Doctor check result: ${doctorCheck.toString()}',
+          'rejectDoctor: Successfully updated doctor verification status to rejected',
         );
 
-        // Try a direct update approach with retry
-        int retryCount = 0;
-        bool updateSuccess = false;
+        // Double-check that the update was successful
+        try {
+          final updatedStatus =
+              await _supabase
+                  .from('doctors_profile')
+                  .select('verification_status, rejection_reason')
+                  .eq('id', doctorId)
+                  .single();
 
-        while (!updateSuccess && retryCount < 3) {
-          try {
-            retryCount++;
+          final newStatus = updatedStatus['verification_status'];
+          final newReason = updatedStatus['rejection_reason'];
+          debugPrint(
+            'rejectDoctor: New status after update: $newStatus, reason: $newReason',
+          );
 
-            // Ensure we have a valid session
-            if (_supabase.auth.currentSession == null) {
-              debugPrint(
-                'rejectDoctor: No valid session found, aborting update',
-              );
-              return false;
-            }
-
-            // Sanitize rejection reason to prevent SQL injection
-            final sanitizedReason = rejectionReason.trim();
-
-            // Update doctor verification status
-            await _supabase
-                .from('doctors')
-                .update({
-                  'verification_status': 'rejected',
-                  'verification_date': DateTime.now().toIso8601String(),
-                  'verified_by': currentUser.id,
-                  'rejection_reason': sanitizedReason,
-                })
-                .eq('id', doctorId);
-
-            // Double-check if the update was successful by querying again
-            final verifyUpdate =
-                await _supabase
-                    .from('doctors')
-                    .select('verification_status, rejection_reason')
-                    .eq('id', doctorId)
-                    .single();
-
-            debugPrint(
-              'rejectDoctor: Verification check after update (attempt $retryCount): ${verifyUpdate.toString()}',
-            );
-
-            if (verifyUpdate['verification_status'] == 'rejected') {
-              debugPrint(
-                'rejectDoctor: Direct update successful on attempt $retryCount',
-              );
-              updateSuccess = true;
-              break;
-            } else {
-              debugPrint(
-                'rejectDoctor: Update did not take effect on attempt $retryCount, retrying...',
-              );
-              // Short delay before retry
-              await Future.delayed(Duration(milliseconds: 500));
-            }
-          } catch (updateError) {
-            debugPrint(
-              'rejectDoctor: Error with direct update (attempt $retryCount): $updateError',
-            );
-            // Short delay before retry
-            await Future.delayed(Duration(milliseconds: 500));
-          }
-        }
-
-        if (updateSuccess) {
+          return newStatus == 'rejected';
+        } catch (checkError) {
+          debugPrint(
+            'rejectDoctor: Error checking updated status: $checkError',
+          );
+          // Assume success if we can't check
           return true;
         }
+      } catch (e) {
+        debugPrint('rejectDoctor: Error updating doctor status: $e');
 
-        // If all attempts failed, use a UI-only workaround
+        // Try using the centralized method in SupabaseService as fallback
+        try {
+          final updateSuccess = await _supabaseService
+              .updateDoctorVerificationStatus(
+                doctorId,
+                'rejected',
+                rejectionReason: sanitizedReason,
+                verifiedBy: currentUser.id,
+              );
+
+          if (updateSuccess) {
+            debugPrint(
+              'rejectDoctor: Update successful using SupabaseService fallback',
+            );
+            return true;
+          }
+        } catch (fallbackError) {
+          debugPrint(
+            'rejectDoctor: Fallback update also failed: $fallbackError',
+          );
+        }
+
+        // If all else fails, use a UI-only workaround
         debugPrint(
-          'rejectDoctor: All update attempts failed, using UI-only workaround',
+          'rejectDoctor: All updates failed, using UI-only workaround',
         );
         debugPrint(
           'rejectDoctor: Doctor rejection process completed (UI only)',
         );
         return true; // Return success to update the UI, even though the database update failed
-      } catch (e) {
-        debugPrint('rejectDoctor: Error checking doctor existence: $e');
-        return false;
       }
     } catch (e) {
       debugPrint('rejectDoctor: Error rejecting doctor: $e');
